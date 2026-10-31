@@ -11,6 +11,7 @@ from __future__ import annotations
 import datetime
 import shlex
 import subprocess
+import sys
 import threading
 import time
 from collections.abc import Callable, Sequence
@@ -171,4 +172,34 @@ def run_command_with_timestamped_output(command: Sequence[str], run_log: RunLog)
         exit_code = convert_return_code_to_exit_code(return_code)
     duration_seconds = time.monotonic() - start_seconds
     run_log.write_line("run", f"exit code: {exit_code}, duration: {duration_seconds:.3f} s")
+    return exit_code
+
+
+def run_with_run_log(
+    log_directory: Path,
+    log_name: str,
+    command_line: Sequence[str],
+    run_body: Callable[[RunLog], int],
+    terminal_out: TextIO | None = None,
+    terminal_err: TextIO | None = None,
+    clock: UtcClock = get_current_utc_time,
+) -> int:
+    """
+    Open a new run log named after `log_name`, run `run_body` with it, and return its exit code.
+    The log starts with its own path and ends with `command_line`, the exit code, and the
+    duration of the whole run.
+    """
+    start_seconds = time.monotonic()
+    with open_run_log_file(log_directory, log_name, clock()) as log_file:
+        run_log = RunLog(
+            log_file,
+            terminal_out if terminal_out is not None else sys.stdout,
+            terminal_err if terminal_err is not None else sys.stderr,
+            clock,
+        )
+        run_log.write_line("run", f"log: {log_file.name}")
+        exit_code = run_body(run_log)
+        duration_seconds = time.monotonic() - start_seconds
+        run_log.write_line("run", f"finished: {shlex.join(command_line)}")
+        run_log.write_line("run", f"exit code: {exit_code}, duration: {duration_seconds:.3f} s")
     return exit_code
