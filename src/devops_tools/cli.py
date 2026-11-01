@@ -1,7 +1,8 @@
 """
 `devops-tools [--log-directory DIR] <subcommand> [args...]`.
-Every run writes `<log-directory>/<utc-timestamp>-<name>.log` (default `cache/logs` under the
-current directory) and exits with the exit code of what it ran.
+`run` and `prune-logs` write `<log-directory>/<utc-timestamp>-<name>.log` (default `cache/logs`
+under the current directory). The repository workflow subcommands print plain output for CI;
+wrap one in `run` to log it. Each exits with the exit code of what it ran.
 """
 
 from __future__ import annotations
@@ -12,6 +13,7 @@ import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
+from devops_tools import changelog_fragments, check_submodule_pins, rebase_open_branches
 from devops_tools.constants import (
     DEFAULT_LOG_DIRECTORY,
     EXIT_CODE_SETUP_ERROR,
@@ -39,7 +41,18 @@ USAGE_TEXT = f"""usage: devops-tools [{LOG_DIRECTORY_FLAG} DIR] <subcommand> [ar
   prune-logs [{OLDER_THAN_DAYS_FLAG} N]
              remove run logs (all, or older than N days); keeps this run's
 
+Repository workflow (settings: [tool.devops-tools] in pyproject.toml; --help on each):
+  rebase-open-branches   rebase open pull requests onto the main branch and push them
+  changelog-fragments    check, preview, or release changes/<issue-id>.md fragments
+  check-submodule-pins   check that every submodule pin is on its upstream branch
+
 Logs go to {LOG_DIRECTORY_FLAG} (default {DEFAULT_LOG_DIRECTORY} under the current directory)."""
+
+REPOSITORY_WORKFLOW_SUBCOMMANDS: dict[str, Callable[[list[str]], int]] = {
+    "rebase-open-branches": rebase_open_branches.main,
+    "changelog-fragments": changelog_fragments.main,
+    "check-submodule-pins": check_submodule_pins.main,
+}
 
 
 def split_log_directory_option(arguments: Sequence[str]) -> tuple[Path, list[str]]:
@@ -117,6 +130,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     if arguments and arguments[0] in ("-h", "--help"):
         print(USAGE_TEXT)
         return 0
+    if arguments and arguments[0] in REPOSITORY_WORKFLOW_SUBCOMMANDS:
+        return REPOSITORY_WORKFLOW_SUBCOMMANDS[arguments[0]](arguments[1:])
     try:
         log_directory, remaining_arguments = split_log_directory_option(arguments)
         if not remaining_arguments:

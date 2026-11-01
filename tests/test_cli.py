@@ -104,3 +104,21 @@ def test_main_reports_usage_errors_without_writing_a_log(tmp_path, capsys, argum
 def test_main_help_prints_usage_and_succeeds(capsys):
     assert main(["--help"]) == 0
     assert "run <name>" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    "subcommand", ["rebase-open-branches", "changelog-fragments", "check-submodule-pins"]
+)
+def test_main_passes_repository_workflow_subcommands_through(subcommand, capsys):
+    with pytest.raises(SystemExit) as exit_info:
+        main([subcommand, "--help"])
+    assert exit_info.value.code == 0
+    assert f"devops-tools {subcommand}" in capsys.readouterr().out
+
+
+def test_main_runs_a_repository_workflow_subcommand_without_a_log(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "changes").mkdir()
+    assert main(["changelog-fragments", "--repository", str(tmp_path), "check"]) == 0
+    assert "Changelog fragments are valid." in capsys.readouterr().out
+    assert not (tmp_path / "cache").exists()

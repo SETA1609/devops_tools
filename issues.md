@@ -10,7 +10,7 @@ One issue is one pull request, on a branch named `issue-<n>-<slug>`. Numbers are
 
 ## Issue 2: Move the repository workflow scripts
 
-- Status: doing
+- Status: review
 - Do: Add the three repository workflow tools as `devops-tools` subcommands, with their tests: `rebase-open-branches` (rebase each open pull request onto the main branch and push with `--force-with-lease`, keeping both sides of a `CHANGELOG.md` conflict where both only added lines), `changelog-fragments` (one `changes/<issue-id>.md` per pull request, moved into `CHANGELOG.md` at a release), and `check-submodule-pins` (every submodule pointer is a commit on its upstream branch). Read the main branch, the issue ID pattern, the changes directory, and the changelog file from a `[tool.devops-tools]` table in `pyproject.toml`.
 - Done when: the three subcommands pass their tests with default and project settings, and the README documents the settings table.
 
