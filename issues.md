@@ -16,12 +16,18 @@ One issue is one pull request, on a branch named `issue-<n>-<slug>`. Numbers are
 
 ## Issue 3: Rebase fixes for squash merges, worktrees, and added lines
 
-- Status: review
+- Status: done
 - Do: `rebase-open-branches` skips a branch whose changes are already in the main branch (squash merged, then pushed again); never moves a local branch that is checked out in another worktree; and keeps both sides when two branches only add lines at the same place in any file matching a pattern in the `keep-both-added-lines` setting, not only the changelog.
 - Done when: a test covers each case.
 
 ## Issue 4: Reusable workflows
 
-- Status: todo
+- Status: review
 - Do: Reusable GitHub workflows (`workflow_call`) for the three subcommands, installing uv with a pinned `astral-sh/setup-uv` and running `devops-tools` from a commit given by the caller. A caller workflow is a few lines.
-- Done when: each workflow passes a workflow lint, and the README shows a caller for each.
+- Done when: each workflow passes a workflow lint and `tests/test_workflows.py`, and the README shows a caller for each.
+
+## Issue 5: What/When/Then docstrings on every test
+
+- Status: todo
+- Do: Give every existing test function a docstring with `What:`, `When:`, and `Then:` lines (rule in `AGENTS.md`). Add a test that fails when a test function lacks one.
+- Done when: every test has the docstring and the new check passes.
