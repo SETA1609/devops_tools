@@ -164,6 +164,7 @@ The caller's `permissions` are the most a reusable workflow gets. Pushes the reb
 | `<name> [--keep-cache] [args...]` | Run a command named in `[tool.devops-tools.container.commands]`, with the extra arguments appended. Builds the image first if it is missing. |
 | `exec [--keep-cache] [--] <command...>` | Run any command in the container. |
 | `shell [--keep-cache]` | An interactive bash in the container. |
+| `agent [--keep-cache] [--rebuild-image] [command...]` | The agent container (see below); `bash` by default. |
 | `prune` | Remove dangling images and unused build cache. Tagged images and volumes stay. |
 | `clean` | End of work only: remove `clean-directories`, the cache volume, then prune. Refuses symlinks, paths outside the checkout, and `protected-directories`. |
 
@@ -180,6 +181,25 @@ RUN apt-get update \
 ```
 
 Download stages may start from anything; the stage that is run must be `FROM ${BASE_IMAGE}`. The runner refuses a Dockerfile without `ARG BASE_IMAGE` and that stage. The base image's entrypoint makes sure `HOME` exists and runs the command (`bash` by default), so a project image needs no entrypoint of its own.
+
+### Agent container
+
+`agent` runs the shipped agent image: the project image plus Node, Claude Code, and an `agent` user with the host's uid and gid. No project keeps its own agent Dockerfile. The home is a named volume (`agent-home-volume`, default `personal-agent-home`; `AGENT_HOME_VOLUME` overrides), so the agent's Claude login and git identity survive the container and never touch the host's. Nothing from the host's `~/.claude`, `~/.gitconfig`, or SSH keys is mounted, so the agent can commit but not push.
+
+On every start, before the command, a start script installs what the project declares and is missing, so a fresh volume needs no manual step:
+
+1. each marketplace in `.claude/settings.json` `extraKnownMarketplaces` that is not known yet (`claude plugin marketplace add owner/repo#ref`),
+2. each plugin set to `true` in `enabledPlugins` that is not installed (`claude plugin install`, user scope, kept in the volume),
+3. each command in `agent-setup-commands`, run in the checkout.
+
+A failed step is reported, the command still starts, and the step is tried again next start. With nothing missing, a start only runs the setup commands.
+
+```toml
+[tool.devops-tools.container]
+agent-home-volume = "personal-agent-home"     # default
+agent-setup-commands = [["uv", "sync", "--project", "tools"]]
+agent-claude-code-version = "2.1.316"         # default: the agent Dockerfile's pin
+```
 
 The container runs as the host user (`CONTAINER_AS_ROOT=1` opts out) with a throwaway home. The checkout is mounted at its host path, and so is its git directory when that lives outside (a linked worktree, a submodule), so git works inside the container from any checkout. `IMAGE` overrides the image tag.
 

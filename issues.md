@@ -40,14 +40,14 @@ One issue is one pull request, on a branch named `issue-<n>-<slug>`. Numbers are
 
 ## Issue 7: Agent container with a start script
 
-- Status: todo
+- Status: done
 - Needs: Issue 8.
 - Do: `devops-tools container agent [command...]` builds the shipped agent image (Node, Claude Code, an agent user with the host's ids) on the project's toolchain image, so no project needs its own agent Dockerfile, and runs it with the home in a named volume (`personal-agent-home` by default), so the agent's logins survive and never touch the host's. Before the command, a start script installs what the project declares and is missing: the marketplaces and plugins in `.claude/settings.json` (`claude plugin marketplace add`, `claude plugin install`) and the setup commands in the settings (for example `uv sync`).
 - Done when: the start script is covered with a fake `claude`, and a real agent container installs a declared plugin on first start with no manual step.
 
 ## Issue 8: Shared base image
 
-- Status: review
+- Status: done
 - Do: Ship a base image with what the shared tooling needs (git, python3, uv, a uv-managed Python 3.13, an entrypoint) and no language toolchain. Build it locally and pass it to the project build as `BASE_IMAGE`; refuse a project Dockerfile that does not build on it. Projects add only their own toolchain on top.
 - Done when: a project image for another language (C) builds on the base, compiles in it, and runs uv, git, and `devops-tools` inside as the host user.
 

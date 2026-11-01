@@ -3,7 +3,8 @@
 #     ARG BASE_IMAGE
 #     FROM ${BASE_IMAGE}
 #     RUN apt-get update && apt-get install -y --no-install-recommends <toolchain> ...
-# `devops-tools container` builds this image first and passes BASE_IMAGE.
+# `devops-tools container` builds this image first and passes BASE_IMAGE. The agent image
+# (../agent) builds on the project image in turn.
 
 FROM ghcr.io/astral-sh/uv:0.10.12@sha256:72ab0aeb448090480ccabb99fb5f52b0dc3c71923bffb5e2e26517a1c27b7fec AS uv
 

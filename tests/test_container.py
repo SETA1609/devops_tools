@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from devops_tools.container import (
+    build_agent_image_tag,
     build_base_image_build_arguments,
     build_container_run_arguments,
     build_image_build_arguments,
@@ -16,6 +17,7 @@ from devops_tools.container import (
     get_shipped_images_directory,
     read_toolchain_version,
     resolve_read_only_mount_paths,
+    split_agent_leading_flags,
     split_keep_cache_flag,
 )
 from devops_tools.container_cleanup import select_paths_to_remove
@@ -321,7 +323,7 @@ def test_the_package_ships_the_base_image_files():
     beyond Python, uv, and git.
     """
     images_directory = get_shipped_images_directory()
-    base_dockerfile_text = (images_directory / "base.Dockerfile").read_text()
+    base_dockerfile_text = (images_directory / "Dockerfile").read_text()
     assert (images_directory / "entrypoint.sh").is_file()
     assert "uv python install" in base_dockerfile_text
     assert "ENTRYPOINT" in base_dockerfile_text
@@ -335,9 +337,9 @@ def test_compute_base_image_tag_changes_with_the_shipped_files(tmp_path):
     When: a file in the images directory changes.
     Then: the tag keeps its repository and version but gets a new content hash.
     """
-    (tmp_path / "base.Dockerfile").write_text("FROM scratch\n")
+    (tmp_path / "Dockerfile").write_text("FROM scratch\n")
     first_tag = compute_base_image_tag(tmp_path)
-    (tmp_path / "base.Dockerfile").write_text("FROM scratch\nRUN true\n")
+    (tmp_path / "Dockerfile").write_text("FROM scratch\nRUN true\n")
     second_tag = compute_base_image_tag(tmp_path)
     assert first_tag.startswith("devops-tools-base:")
     assert first_tag.rsplit("-", 1)[0] == second_tag.rsplit("-", 1)[0]
@@ -352,7 +354,7 @@ def test_build_base_image_build_arguments_use_the_shipped_directory_as_context(t
     """
     assert build_base_image_build_arguments("podman", tmp_path, "devops-tools-base:1-abc") == [
         "podman", "build",
-        "--file", str(tmp_path / "base.Dockerfile"),
+        "--file", str(tmp_path / "Dockerfile"),
         "--tag", "devops-tools-base:1-abc",
         str(tmp_path),
     ]  # fmt: skip
@@ -381,3 +383,34 @@ def test_check_dockerfile_builds_on_base_image(tmp_path, dockerfile_text, is_acc
         return
     with pytest.raises(ContainerSetupError, match=r"ARG BASE_IMAGE.*FROM \$\{BASE_IMAGE\}"):
         check_dockerfile_builds_on_base_image(tmp_path, VERSIONED_SETTINGS)
+
+
+@pytest.mark.parametrize(
+    ("extra_arguments", "expected"),
+    [
+        (["--rebuild-image", "--keep-cache", "claude"], (True, True, ["claude"])),
+        (["claude", "--rebuild-image"], (False, False, ["claude", "--rebuild-image"])),
+        ([], (False, False, [])),
+    ],
+)
+def test_split_agent_leading_flags(extra_arguments, expected):
+    """
+    What: split_agent_leading_flags.
+    When: the agent flags come first in any order, after the command, or not at all.
+    Then: only leading flags count; the rest is the command.
+    """
+    assert split_agent_leading_flags(extra_arguments) == expected
+
+
+def test_build_agent_image_tag_follows_the_project_image(monkeypatch):
+    """
+    What: build_agent_image_tag.
+    When: the project image is `example:zig-1.2.3`, and when AGENT_IMAGE is set.
+    Then: the tag is `example-agent:zig-1.2.3-<agent hash>`, or AGENT_IMAGE itself.
+    """
+    monkeypatch.delenv("AGENT_IMAGE", raising=False)
+    agent_tag = build_agent_image_tag("example:zig-1.2.3")
+    assert agent_tag.startswith("example-agent:zig-1.2.3-")
+    assert len(agent_tag.rsplit("-", 1)[-1]) == 12
+    monkeypatch.setenv("AGENT_IMAGE", "mine:agent")
+    assert build_agent_image_tag("example:zig-1.2.3") == "mine:agent"
