@@ -1,0 +1,14 @@
+{
+  "name": "devops-tools",
+  "description": "Shared devops skills: status report, roadmap order, and docs fetching",
+  "owner": {
+    "name": "Sebastian Tamayo"
+  },
+  "plugins": [
+    {
+      "name": "devops-tools",
+      "source": "./",
+      "description": "Where the work stands, what to do next, and upstream docs fetched into a local cache"
+    }
+  ]
+}
