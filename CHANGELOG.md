@@ -4,6 +4,11 @@ Newest first. Each entry names its issue from `issues.md`.
 
 ## Unreleased
 
+### Issue 9: Ship the skills as a Claude Code plugin
+
+- `devops-tools status-report`, `roadmap-order`, and `fetch-docs`, reading paths and the issue ID pattern from new optional settings: `stories-directory`, `roadmap-file`, `focus-file`, `docs-cache-directory`.
+- The repository is a Claude Code marketplace (`.claude-plugin/marketplace.json`) whose plugin is the repository root, with skills `status-report`, `roadmap-order`, and `fetch-docs` that run `uvx --from "${CLAUDE_PLUGIN_ROOT}" devops-tools …`.
+
 ### Issue 8: Shared base image
 
 - The package ships `devops-tools-base` (Ubuntu, git, python3, uv, a uv-managed Python 3.13, and an entrypoint) and no language toolchain. `devops-tools container` builds it locally, tagged with the package version and a content hash, and passes it to the project build as `BASE_IMAGE`; `image` always rebuilds it.

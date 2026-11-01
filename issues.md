@@ -50,3 +50,10 @@ One issue is one pull request, on a branch named `issue-<n>-<slug>`. Numbers are
 - Status: review
 - Do: Ship a base image with what the shared tooling needs (git, python3, uv, a uv-managed Python 3.13, an entrypoint) and no language toolchain. Build it locally and pass it to the project build as `BASE_IMAGE`; refuse a project Dockerfile that does not build on it. Projects add only their own toolchain on top.
 - Done when: a project image for another language (C) builds on the base, compiles in it, and runs uv, git, and `devops-tools` inside as the host user.
+
+## Issue 9: Ship the skills as a Claude Code plugin
+
+- Status: review
+- Do: Move the status report, the roadmap order keywords, and docs fetching into the package as `devops-tools status-report`, `roadmap-order`, and `fetch-docs`, reading project paths from the settings. Make this repository a Claude Code marketplace whose one plugin is the repository root, with one skill per subcommand.
+- Done when: the moved tests pass with neutral fixtures, `claude plugin validate` passes, and the plugin installs from a marketplace and lists its skills.
+
