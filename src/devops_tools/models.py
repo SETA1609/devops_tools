@@ -64,3 +64,30 @@ class FragmentCommit:
     commit_sha: str
     committed_at_unix_seconds: int
     pull_request_number: int | None
+
+
+@dataclass(frozen=True)
+class SubmodulePin:
+    """
+    One submodule pointer at HEAD and where its upstream lives.
+    """
+
+    path: str
+    url: str
+    pinned_commit: str
+    branch: str | None
+
+
+@dataclass(frozen=True)
+class SubmodulePinCheck:
+    """
+    The result for one pin; suggested_commit is set only for not_on_branch with a tree match.
+    """
+
+    path: str
+    url: str
+    pinned_commit: str
+    branch: str | None
+    status: str
+    suggested_commit: str | None
+    message: str

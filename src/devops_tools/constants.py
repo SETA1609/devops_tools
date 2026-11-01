@@ -36,3 +36,14 @@ CHANGES_README_FILE_NAME = "README.md"
 PULL_REQUEST_NUMBER_IN_SUBJECT = re.compile(r"\(#(?P<number>[0-9]+)\)\s*$")
 CHANGELOG_LAST_UPDATED_LINE = re.compile(r"^Last updated: \S+$", re.MULTILINE)
 CHANGELOG_SECTION_HEADING = re.compile(r"^## ", re.MULTILINE)
+
+# Submodule pins
+GITLINK_MODE = "160000"
+STATUS_ON_BRANCH = "on_branch"
+STATUS_NOT_ON_BRANCH = "not_on_branch"
+STATUS_MISSING_ON_REMOTE = "missing_on_remote"
+STATUS_FETCH_FAILED = "fetch_failed"
+UPSTREAM_REMOTE_NAME = "upstream"
+UPSTREAM_BRANCH_REFERENCE = "refs/remotes/upstream/pinned-branch"
+SHORT_COMMIT_LENGTH = 12
+GIT_TIMEOUT_SECONDS = 300
