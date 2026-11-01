@@ -4,6 +4,12 @@ Newest first. Each entry names its issue from `issues.md`.
 
 ## Unreleased
 
+### Issue 4: Reusable workflows
+
+- Reusable workflows `rebase-open-branches.yml`, `changelog-fragments.yml`, and `submodule-pins.yml` (`workflow_call`). Each takes `devops-tools-version` (a full commit SHA, checked before use) and, where settings apply, `settings-file`, installs uv with a pinned `astral-sh/setup-uv`, and runs `uvx --from git+…@<sha> devops-tools …`.
+- `tests/test_workflows.py`: every action is pinned to a SHA with a version comment, every workflow declares its permissions, no `${{ }}` inside `run:` scripts, and the reusable workflows check the version first.
+- Contributor rules: release tags `vX.Y.Z`, and What/When/Then docstrings on every test.
+
 ### Issue 3: Rebase fixes for squash merges, worktrees, and added lines
 
 - `rebase-open-branches` skips a branch whose every changed file already has the branch's content in the main branch, as after a squash merge, instead of replaying it into conflicts.

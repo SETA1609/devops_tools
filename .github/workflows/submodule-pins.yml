@@ -1,0 +1,47 @@
+# Reusable: check that every submodule pointer of the calling repository is a commit on its
+# upstream branch. The caller runs it on pull_request and push with contents: read, usually
+# filtered to .gitmodules and the submodule paths.
+name: Submodule pins
+
+on:
+  workflow_call:
+    inputs:
+      devops-tools-version:
+        description: Full 40-character commit SHA of SETA1609/devops_tools to run, the same one the caller pins this workflow to.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  check-submodule-pins:
+    name: Check submodule pins are on their upstream branch
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check the devops-tools version
+        env:
+          DEVOPS_TOOLS_VERSION: ${{ inputs.devops-tools-version }}
+        run: |
+          if ! [[ "$DEVOPS_TOOLS_VERSION" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "devops-tools-version must be a full 40-character commit SHA, got: $DEVOPS_TOOLS_VERSION" >&2
+            exit 1
+          fi
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.10.12"
+          python-version: "3.13"
+
+      - name: Check out
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Check submodule pins
+        env:
+          DEVOPS_TOOLS_VERSION: ${{ inputs.devops-tools-version }}
+        run: |
+          uvx --from "git+https://github.com/SETA1609/devops_tools@$DEVOPS_TOOLS_VERSION" \
+            devops-tools check-submodule-pins

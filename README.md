@@ -2,7 +2,7 @@
 
 Shared devops tooling for working with CI and containers, used by several repositories. Python 3.13, standard library only at runtime; a project needs only [uv](https://docs.astral.sh/uv/).
 
-It has timestamped run logs, log pruning, and three repository workflow tools: open pull request rebasing, changelog fragments, and a submodule pin check. Planned: reusable GitHub workflows for those, the container runner, and agent skills as a Claude Code plugin. See `issues.md`.
+It has timestamped run logs, log pruning, and three repository workflow tools: open pull request rebasing, changelog fragments, and a submodule pin check. Each has a reusable GitHub workflow. Planned: the container runner and agent skills as a Claude Code plugin. See `issues.md`.
 
 ## Install
 
@@ -93,6 +93,70 @@ keep-both-added-lines = ["docs/stories/*.md"]             # more files the rebas
 ```
 
 Branch names are `<issue-id>-<slug>` or `agent/<agent-name>/<issue-id>-<slug>`, matched ignoring case.
+
+### Reusable workflows
+
+A project calls them with a few lines, pinning the workflow and the tool to the same commit (the release tag goes in a comment). `devops-tools-version` must be the full 40-character SHA; anything else fails before uv installs it. `settings-file` is optional and defaults to the root `pyproject.toml`.
+
+```yaml
+# .github/workflows/rebase-open-branches.yml
+name: Rebase open branches
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+  pull-requests: read
+concurrency:
+  group: rebase-open-branches
+  cancel-in-progress: false
+jobs:
+  rebase-open-branches:
+    uses: SETA1609/devops_tools/.github/workflows/rebase-open-branches.yml@<sha> # v0.1.0
+    with:
+      devops-tools-version: <sha>
+      settings-file: tools/pyproject.toml
+```
+
+```yaml
+# .github/workflows/changelog-fragments.yml
+name: Changelog fragments
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  check-changelog-fragments:
+    uses: SETA1609/devops_tools/.github/workflows/changelog-fragments.yml@<sha> # v0.1.0
+    with:
+      devops-tools-version: <sha>
+```
+
+```yaml
+# .github/workflows/submodule-pins.yml
+name: Submodule pins
+on:
+  pull_request:
+    branches: [main]
+    paths: [.gitmodules, libs/**]
+  push:
+    branches: [main]
+    paths: [.gitmodules, libs/**]
+permissions:
+  contents: read
+jobs:
+  check-submodule-pins:
+    uses: SETA1609/devops_tools/.github/workflows/submodule-pins.yml@<sha> # v0.1.0
+    with:
+      devops-tools-version: <sha>
+```
+
+The caller's `permissions` are the most a reusable workflow gets. Pushes the rebase makes with `GITHUB_TOKEN` do not trigger other workflows.
+
+## Releases
+
+Releases are tags `vX.Y.Z` on `main` (semantic versioning), each with a `## vX.Y.Z` section in `CHANGELOG.md`. Tags are never moved or deleted. Projects pin the commit SHA and name the tag in a comment.
 
 ## Development
 

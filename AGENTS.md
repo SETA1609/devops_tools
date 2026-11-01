@@ -8,7 +8,8 @@ Shared devops tooling for several repositories: timestamped run logs and log pru
 - Runtime code uses the Python standard library only. Development uses uv, ruff, and pytest.
 - Work is tracked in `issues.md` (`Issue N`). One issue is one pull request on a branch `issue-<n>-<slug>`, with at most 20 changed files (files with 5 or fewer changed lines do not count). Each pull request adds its entry to `CHANGELOG.md` under `Unreleased`.
 - Commit only when the owner asks. Merging to `main` needs the owner. Do not force-push or rewrite published history.
-- Pin every GitHub Action to a full commit SHA with the version in a comment.
+- Pin every GitHub Action to a full commit SHA with the version in a comment. Workflow `run:` scripts get inputs and event values through `env:`, never as `${{ }}` inside the script; `tests/test_workflows.py` checks both.
+- Releases are tags `vX.Y.Z` on `main`. Cutting one: move the `Unreleased` entries under `## vX.Y.Z`, merge that, then tag the merge commit. Tags are never moved or deleted. Pushing a tag needs the owner.
 
 ## Code style
 
@@ -16,6 +17,16 @@ Shared devops tooling for several repositories: timestamped run logs and log pru
 - Docstrings put `"""` on their own lines and have no blank lines inside.
 - `constants.py` holds constants, `exceptions.py` exceptions, `models.py` only types (dataclasses, aliases).
 - Line length 100, Python 3.13.
+- Every test function has a docstring with `What:` (the unit or behaviour under test), `When:` (the situation), and `Then:` (the expected outcome), one line each:
+
+```python
+def test_rebase_skips_a_branch_whose_changes_are_already_in_the_target(tmp_path):
+    """
+    What: rebase-open-branches.
+    When: every file the branch changed already has the branch's content in the main branch.
+    Then: the branch is left unchanged and the run still succeeds.
+    """
+```
 
 ## Checks
 

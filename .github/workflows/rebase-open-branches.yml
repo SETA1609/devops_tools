@@ -1,0 +1,57 @@
+# Reusable: rebase each open pull request from the calling repository onto its main branch and
+# push with --force-with-lease. The caller runs it on push to main with contents: write and
+# pull-requests: read. Pushes made with GITHUB_TOKEN do not trigger other workflows.
+name: Rebase open branches
+
+on:
+  workflow_call:
+    inputs:
+      devops-tools-version:
+        description: Full 40-character commit SHA of SETA1609/devops_tools to run, the same one the caller pins this workflow to.
+        required: true
+        type: string
+      settings-file:
+        description: pyproject.toml with the [tool.devops-tools] table, relative to the repository root. Empty means the root pyproject.toml.
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  rebase-open-branches:
+    name: Rebase open pull requests onto the main branch
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check the devops-tools version
+        env:
+          DEVOPS_TOOLS_VERSION: ${{ inputs.devops-tools-version }}
+        run: |
+          if ! [[ "$DEVOPS_TOOLS_VERSION" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "devops-tools-version must be a full 40-character commit SHA, got: $DEVOPS_TOOLS_VERSION" >&2
+            exit 1
+          fi
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.10.12"
+          python-version: "3.13"
+
+      - name: Check out
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Rebase open pull requests
+        env:
+          DEVOPS_TOOLS_VERSION: ${{ inputs.devops-tools-version }}
+          SETTINGS_FILE: ${{ inputs.settings-file }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          settings_arguments=()
+          if [ -n "$SETTINGS_FILE" ]; then settings_arguments=(--settings-file "$SETTINGS_FILE"); fi
+          uvx --from "git+https://github.com/SETA1609/devops_tools@$DEVOPS_TOOLS_VERSION" \
+            devops-tools rebase-open-branches "${settings_arguments[@]}"
