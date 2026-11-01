@@ -4,6 +4,10 @@ Newest first. Each entry names its issue from `issues.md`.
 
 ## Unreleased
 
+## v0.1.0 (2026-11-01)
+
+First release: run logs, log pruning, the three repository workflow tools with settings, and their reusable workflows.
+
 ### Issue 4: Reusable workflows
 
 - Reusable workflows `rebase-open-branches.yml`, `changelog-fragments.yml`, and `submodule-pins.yml` (`workflow_call`). Each takes `devops-tools-version` (a full commit SHA, checked before use) and, where settings apply, `settings-file`, installs uv with a pinned `astral-sh/setup-uv`, and runs `uvx --from git+…@<sha> devops-tools …`.
