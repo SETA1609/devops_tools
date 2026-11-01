@@ -167,6 +167,20 @@ The caller's `permissions` are the most a reusable workflow gets. Pushes the reb
 | `prune` | Remove dangling images and unused build cache. Tagged images and volumes stay. |
 | `clean` | End of work only: remove `clean-directories`, the cache volume, then prune. Refuses symlinks, paths outside the checkout, and `protected-directories`. |
 
+### Images: a shared base, the project's toolchain on top
+
+The package ships `devops-tools-base`: Ubuntu with git, python3, uv, and a uv-managed Python 3.13, which is everything the shared tooling needs, and no language toolchain. The runner builds it locally (tag `devops-tools-base:<package version>-<content hash>`, so a changed base is rebuilt) and passes it to the project build as `BASE_IMAGE`. A project's Dockerfile adds only its own tools, for any language:
+
+```dockerfile
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends gcc g++ cmake openjdk-21-jdk-headless golang \
+    && rm -rf /var/lib/apt/lists/*
+```
+
+Download stages may start from anything; the stage that is run must be `FROM ${BASE_IMAGE}`. The runner refuses a Dockerfile without `ARG BASE_IMAGE` and that stage. The base image's entrypoint makes sure `HOME` exists and runs the command (`bash` by default), so a project image needs no entrypoint of its own.
+
 The container runs as the host user (`CONTAINER_AS_ROOT=1` opts out) with a throwaway home. The checkout is mounted at its host path, and so is its git directory when that lives outside (a linked worktree, a submodule), so git works inside the container from any checkout. `IMAGE` overrides the image tag.
 
 ```toml

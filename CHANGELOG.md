@@ -4,6 +4,11 @@ Newest first. Each entry names its issue from `issues.md`.
 
 ## Unreleased
 
+### Issue 8: Shared base image
+
+- The package ships `devops-tools-base` (Ubuntu, git, python3, uv, a uv-managed Python 3.13, and an entrypoint) and no language toolchain. `devops-tools container` builds it locally, tagged with the package version and a content hash, and passes it to the project build as `BASE_IMAGE`; `image` always rebuilds it.
+- A project Dockerfile must declare `ARG BASE_IMAGE` and build its final stage `FROM ${BASE_IMAGE}`, adding only its own toolchain (C, C++, Java, Go, Zig, ...). The runner refuses one that does not.
+
 ### Issue 6: Toolchain container runner
 
 - `devops-tools container <action>`: `image`, `exec`, `shell`, `prune`, `clean`, and commands named in `[tool.devops-tools.container.commands]`, each logged to `cache/logs/`.

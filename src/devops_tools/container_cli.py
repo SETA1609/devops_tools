@@ -29,6 +29,7 @@ from devops_tools.constants import (
     KEEP_CACHE_FLAG,
 )
 from devops_tools.container import (
+    build_base_image_build_arguments,
     build_container_run_arguments,
     build_image_build_arguments,
     build_image_summary_arguments,
@@ -38,11 +39,14 @@ from devops_tools.container import (
     build_volume_chown_arguments,
     build_volume_create_arguments,
     build_volume_remove_arguments,
+    check_dockerfile_builds_on_base_image,
+    compute_base_image_tag,
     detect_container_binary,
     does_container_object_exist,
     find_git_common_directory_outside,
     find_repository_root,
     get_host_user_and_group_ids,
+    get_shipped_images_directory,
     measure_volume_size_bytes,
     read_toolchain_version,
     resolve_read_only_mount_paths,
@@ -66,13 +70,37 @@ from devops_tools.settings import read_repository_settings
 ContainerActionFunction = Callable[[Path, ContainerSettings, list[str], RunLog], int]
 
 
+def build_base_image(container_binary: str, always_build: bool, run_log: RunLog) -> tuple[str, int]:
+    """
+    Build the shared base image when it is missing (or always, for `image`). Return (tag, code).
+    """
+    images_directory = get_shipped_images_directory()
+    base_image = compute_base_image_tag(images_directory)
+    if not always_build and does_container_object_exist(container_binary, "image", base_image):
+        return base_image, 0
+    run_log.write_line("run", f"building the shared base image {base_image}")
+    return base_image, run_command_with_timestamped_output(
+        build_base_image_build_arguments(container_binary, images_directory, base_image), run_log
+    )
+
+
 def build_container_image(
     repository_root: Path,
     container_settings: ContainerSettings,
     container_binary: str,
     run_log: RunLog,
+    always_build_base_image: bool = False,
 ) -> int:
+    """
+    Build the base image if needed, then the project image on it.
+    """
+    check_dockerfile_builds_on_base_image(repository_root, container_settings)
     toolchain_version = read_toolchain_version(repository_root, container_settings)
+    base_image, base_exit_code = build_base_image(
+        container_binary, always_build_base_image, run_log
+    )
+    if base_exit_code != 0:
+        return base_exit_code
     image = build_image_tag(container_settings, toolchain_version)
     version_text = (
         ""
@@ -82,7 +110,12 @@ def build_container_image(
     run_log.write_line("run", f"building {image}{version_text}")
     return run_command_with_timestamped_output(
         build_image_build_arguments(
-            container_binary, repository_root, container_settings, image, toolchain_version
+            container_binary,
+            repository_root,
+            container_settings,
+            image,
+            toolchain_version,
+            base_image,
         ),
         run_log,
     )
@@ -203,7 +236,7 @@ def run_image_action(
     """
     container_binary = detect_container_binary()
     build_exit_code = build_container_image(
-        repository_root, container_settings, container_binary, run_log
+        repository_root, container_settings, container_binary, run_log, always_build_base_image=True
     )
     if build_exit_code != 0:
         return build_exit_code

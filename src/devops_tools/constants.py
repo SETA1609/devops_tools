@@ -70,3 +70,12 @@ RUN_AS_ROOT_ENVIRONMENT_VARIABLE = "CONTAINER_AS_ROOT"
 BUILT_IN_CONTAINER_ACTIONS = ("image", "exec", "shell", "prune", "clean", "agent")
 CONTAINER_COMMAND_NAME_PATTERN = re.compile(r"[a-z][a-z0-9-]*")
 CONTAINER_IMAGE_NAME_PATTERN = re.compile(r"[a-z0-9][a-z0-9._/-]*")
+
+# Shared base image, shipped in the package
+SHIPPED_IMAGES_DIRECTORY_NAME = "container_images"
+BASE_IMAGE_DOCKERFILE_NAME = "base.Dockerfile"
+BASE_IMAGE_REPOSITORY = "devops-tools-base"
+BASE_IMAGE_BUILD_ARGUMENT = "BASE_IMAGE"
+DOCKERFILE_BASE_IMAGE_ARGUMENT_LINE = re.compile(r"^ARG\s+BASE_IMAGE\s*$", re.MULTILINE)
+DOCKERFILE_FROM_BASE_IMAGE_LINE = re.compile(r"^FROM\s+\$\{BASE_IMAGE\}(\s|$)", re.MULTILINE)
+CONTENT_HASH_LENGTH = 12
