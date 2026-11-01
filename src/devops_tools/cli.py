@@ -17,7 +17,10 @@ from devops_tools import (
     changelog_fragments,
     check_submodule_pins,
     container_cli,
+    fetch_docs,
     rebase_open_branches,
+    roadmap_order,
+    status_report,
 )
 from devops_tools.constants import (
     DEFAULT_LOG_DIRECTORY,
@@ -50,6 +53,9 @@ Repository workflow (settings: [tool.devops-tools] in pyproject.toml; --help on 
   rebase-open-branches   rebase open pull requests onto the main branch and push them
   changelog-fragments    check, preview, or release changes/<issue-id>.md fragments
   check-submodule-pins   check that every submodule pin is on its upstream branch
+  status-report          where the work stands: branches, pull requests, story issues
+  roadmap-order          show, write, or check first / ready / blocked order keywords
+  fetch-docs             download docs, specs, and sources into the local cache
 
 Toolchain container (settings: [tool.devops-tools.container]; logged to cache/logs):
   container <action>     image, exec, shell, prune, clean, or a named command
@@ -60,6 +66,9 @@ REPOSITORY_WORKFLOW_SUBCOMMANDS: dict[str, Callable[[list[str]], int]] = {
     "rebase-open-branches": rebase_open_branches.main,
     "changelog-fragments": changelog_fragments.main,
     "check-submodule-pins": check_submodule_pins.main,
+    "status-report": status_report.main,
+    "roadmap-order": roadmap_order.main,
+    "fetch-docs": fetch_docs.main,
     "container": container_cli.main,
 }
 

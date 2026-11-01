@@ -33,3 +33,14 @@ class CleanupRefusedError(Exception):
     """
     A path was chosen for removal that cleanup must never touch. The message names it.
     """
+
+
+class FetchDocsError(Exception):
+    """
+    A fetch-docs failure with a stable code, reported to the caller as JSON.
+    """
+
+    def __init__(self, error_code: str, message: str) -> None:
+        super().__init__(message)
+        self.error_code = error_code
+        self.message = message
