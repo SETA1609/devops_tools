@@ -53,7 +53,7 @@ One issue is one pull request, on a branch named `issue-<n>-<slug>`. Numbers are
 
 ## Issue 9: Ship the skills as a Claude Code plugin
 
-- Status: review
+- Status: done
 - Do: Move the status report, the roadmap order keywords, and docs fetching into the package as `devops-tools status-report`, `roadmap-order`, and `fetch-docs`, reading project paths from the settings. Make this repository a Claude Code marketplace whose one plugin is the repository root, with one skill per subcommand.
 - Done when: the moved tests pass with neutral fixtures, `claude plugin validate` passes, and the plugin installs from a marketplace and lists its skills.
 

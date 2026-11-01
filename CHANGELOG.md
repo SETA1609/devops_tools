@@ -4,6 +4,10 @@ Newest first. Each entry names its issue from `issues.md`.
 
 ## Unreleased
 
+## v0.2.0 (2026-11-01)
+
+The toolchain container runner with a shared base image, the agent container with a start script that installs declared plugins, and the skills (status report, roadmap order, fetch docs) as a Claude Code plugin.
+
 ### Issue 9: Ship the skills as a Claude Code plugin
 
 - `devops-tools status-report`, `roadmap-order`, and `fetch-docs`, reading paths and the issue ID pattern from new optional settings: `stories-directory`, `roadmap-file`, `focus-file`, `docs-cache-directory`.
