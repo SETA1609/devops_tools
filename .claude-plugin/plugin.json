@@ -1,0 +1,11 @@
+{
+  "name": "devops-tools",
+  "version": "0.1.0",
+  "description": "Where the work stands, what to do next, and upstream docs fetched into a local cache",
+  "author": {
+    "name": "Sebastian Tamayo"
+  },
+  "repository": "https://github.com/SETA1609/devops_tools",
+  "license": "MIT",
+  "keywords": ["devops", "git", "roadmap", "docs"]
+}

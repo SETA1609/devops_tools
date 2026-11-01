@@ -14,9 +14,13 @@ from devops_tools.constants import (
     DEFAULT_CHANGES_DIRECTORY,
     DEFAULT_CONTAINER_HOME_DIRECTORY,
     DEFAULT_DOCKERFILE,
+    DEFAULT_DOCS_CACHE_DIRECTORY,
+    DEFAULT_FOCUS_FILE,
     DEFAULT_ISSUE_ID_PATTERN,
     DEFAULT_MAIN_BRANCH,
     DEFAULT_PROTECTED_DIRECTORIES,
+    DEFAULT_ROADMAP_FILE,
+    DEFAULT_STORIES_DIRECTORY,
 )
 
 
@@ -84,6 +88,9 @@ class RepositorySettings:
     `issue_id_pattern` is a regular expression for one issue ID, without anchors or named groups.
     Paths are relative to the repository root. `keep_both_added_lines` holds gitattributes
     patterns of more files whose added-lines conflicts the rebase resolves like the changelog's.
+    `stories_directory` holds one Markdown file per story track; `roadmap_file` gets the
+    generated story order table; `focus_file` holds the owner's `Focus:` line;
+    `docs_cache_directory` is where fetch-docs saves downloads.
     """
 
     main_branch: str = DEFAULT_MAIN_BRANCH
@@ -91,6 +98,10 @@ class RepositorySettings:
     changes_directory: str = DEFAULT_CHANGES_DIRECTORY
     changelog_file: str = DEFAULT_CHANGELOG_FILE
     keep_both_added_lines: tuple[str, ...] = ()
+    stories_directory: str = DEFAULT_STORIES_DIRECTORY
+    roadmap_file: str = DEFAULT_ROADMAP_FILE
+    focus_file: str = DEFAULT_FOCUS_FILE
+    docs_cache_directory: str = DEFAULT_DOCS_CACHE_DIRECTORY
     container: ContainerSettings | None = None
 
 
@@ -155,3 +166,102 @@ class SubmodulePinCheck:
     status: str
     suggested_commit: str | None
     message: str
+
+
+@dataclass(frozen=True)
+class RoadmapIssue:
+    """
+    One `#### <issue-id> <title>` entry in a story file: its story, status, and needed issues.
+    """
+
+    issue_id: str
+    title: str
+    story_id: str
+    status: str
+    needed_issue_ids: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class BranchStatus:
+    """
+    One local branch compared with the main branch on origin.
+    upstream_state: tracking, gone (its remote branch was deleted), or none (never pushed).
+    merged_pull_request_number: set when a main commit names the branch's issue with `(#N)`,
+    which also catches squash merges of a branch that was rebased after the local copy.
+    """
+
+    name: str
+    upstream_state: str
+    commits_ahead_of_main: int
+    commits_behind_main: int
+    is_content_in_main: bool
+    merged_pull_request_number: int | None
+    is_current: bool
+    worktree_path: str | None
+    worktree_uncommitted_change_count: int
+
+
+@dataclass(frozen=True)
+class PullRequestStatus:
+    """
+    A pull request on origin. source: gh (open pull requests) or refs (refs/pull/*/head whose
+    head is still a remote branch tip, so probably open).
+    """
+
+    number: int
+    branch: str | None
+    head_commit: str
+    source: str
+
+
+@dataclass(frozen=True)
+class SubmoduleStatus:
+    """
+    One line of `git submodule status`: state is ok, not_at_pin, not_initialized, or conflict.
+    """
+
+    path: str
+    pinned_or_checked_out_commit: str
+    state: str
+
+
+@dataclass(frozen=True)
+class StoryIssueStatus:
+    """
+    An issue in the story files that is active (doing, review) or the next todo of its file.
+    """
+
+    issue_id: str
+    title: str
+    status: str
+    story_file: str
+    merged_pull_request_number: int | None
+
+
+@dataclass(frozen=True)
+class StatusReport:
+    """
+    Everything the status report prints.
+    """
+
+    current_branch: str
+    uncommitted_change_count: int
+    main_reference: str
+    main_commit_subject: str
+    branches: list[BranchStatus]
+    pull_requests: list[PullRequestStatus]
+    submodules: list[SubmoduleStatus]
+    submodule_pin_problems: list[str]
+    story_issues: list[StoryIssueStatus]
+    suggested_actions: list[str]
+
+
+@dataclass(frozen=True)
+class FetchedDocument:
+    """
+    One downloaded URL: where it came from, where it is saved, and its size.
+    """
+
+    source_url: str
+    cache_file_path: Path
+    byte_count: int

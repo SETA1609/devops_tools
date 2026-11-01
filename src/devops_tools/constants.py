@@ -91,3 +91,34 @@ AGENT_HOME_VOLUME_ENVIRONMENT_VARIABLE = "AGENT_HOME_VOLUME"
 AGENT_SETUP_COMMANDS_ENVIRONMENT_VARIABLE = "DEVOPS_TOOLS_AGENT_SETUP_COMMANDS"
 REBUILD_AGENT_IMAGE_FLAG = "--rebuild-image"
 DEFAULT_AGENT_COMMAND = ("bash",)
+
+# Story files, roadmap order, and status report
+DEFAULT_STORIES_DIRECTORY = "docs/stories"
+DEFAULT_ROADMAP_FILE = "docs/roadmap.md"
+DEFAULT_FOCUS_FILE = "docs/stories/README.md"
+STORY_FILES_SKIPPED = ("README.md", "done.md")
+DONE_STORY_FILE_NAME = "done.md"
+STORY_HEADING = re.compile(r"^## (?P<story_id>[A-Za-z][A-Za-z0-9.]*) (?P<title>.*)$", re.MULTILINE)
+ISSUE_HEADING_LINE = re.compile(r"^#### (?P<issue_id>\S+) (?P<title>.+)$")
+ISSUE_STATUS_LINE = re.compile(r"^- Status: (?P<status>\w+)", re.MULTILINE)
+ISSUE_NEEDS_LINE = re.compile(r"^- Needs: (?P<needs>.*)$", re.MULTILINE)
+FOCUS_LINE = re.compile(r"^Focus: (?P<focus>.+)$", re.MULTILINE)
+FINISHED_ISSUE_STATUSES = ("done", "review")
+ACTIVE_ISSUE_STATUSES = ("doing", "review")
+# The begin marker is matched up to the end of its comment, so its text after the prefix is free.
+ROADMAP_TABLE_BEGIN = "<!-- roadmap-order begin"
+ROADMAP_TABLE_END = "<!-- roadmap-order end -->"
+GIT_TIMEOUT_SECONDS = 120
+
+# Fetch docs
+DEFAULT_DOCS_CACHE_DIRECTORY = "cache/docs"
+DEFAULT_MAXIMUM_DOWNLOAD_BYTE_COUNT = 20 * 1024 * 1024
+DEFAULT_DOWNLOAD_TIMEOUT_SECONDS = 30
+VULKAN_SPEC_REPOSITORY = "KhronosGroup/Vulkan-Docs"
+# GitHub resolves HEAD to the repository's default branch.
+DEFAULT_GITHUB_REFERENCE = "HEAD"
+SOURCE_METADATA_FILE_NAME = "SOURCE.json"
+URL_SOURCE_METADATA_SUFFIX = ".source.json"
+FETCH_DOCS_USER_AGENT = "devops-tools-fetch-docs"
+GITHUB_REPOSITORY_NAME_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
+COMMIT_SHA_PATTERN = re.compile(r"^[0-9a-f]{40}$")

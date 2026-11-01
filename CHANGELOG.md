@@ -4,6 +4,11 @@ Newest first. Each entry names its issue from `issues.md`.
 
 ## Unreleased
 
+### Issue 9: Ship the skills as a Claude Code plugin
+
+- `devops-tools status-report`, `roadmap-order`, and `fetch-docs`, reading paths and the issue ID pattern from new optional settings: `stories-directory`, `roadmap-file`, `focus-file`, `docs-cache-directory`.
+- The repository is a Claude Code marketplace (`.claude-plugin/marketplace.json`) whose plugin is the repository root, with skills `status-report`, `roadmap-order`, and `fetch-docs` that run `uvx --from "${CLAUDE_PLUGIN_ROOT}" devops-tools …`.
+
 ### Issue 7: Agent container with a start script
 
 - `devops-tools container agent [--keep-cache] [--rebuild-image] [command...]` builds the shipped agent image (Node, Claude Code, an `agent` user with the host's ids) on the project image and runs it with the home in a named volume (`personal-agent-home` by default).

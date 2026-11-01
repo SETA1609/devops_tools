@@ -2,7 +2,7 @@
 
 Shared devops tooling for working with CI and containers, used by several repositories. Python 3.13, standard library only at runtime; a project needs only [uv](https://docs.astral.sh/uv/).
 
-It has timestamped run logs, log pruning, and three repository workflow tools: open pull request rebasing, changelog fragments, and a submodule pin check. Each has a reusable GitHub workflow. It also runs a project's toolchain container. Planned: the agent container and agent skills as a Claude Code plugin. See `issues.md`.
+It has timestamped run logs, log pruning, and three repository workflow tools: open pull request rebasing, changelog fragments, and a submodule pin check. Each has a reusable GitHub workflow. It also runs a project's toolchain container. Planned: the agent container. See `issues.md`.
 
 ## Install
 
@@ -223,6 +223,43 @@ test = ["zig", "build", "test"]
 ```
 
 A wrapper script is one line: `exec uv run --project tools devops-tools container --settings-file tools/pyproject.toml build "$@"`.
+
+## Claude Code plugin
+
+This repository is also a Claude Code plugin marketplace, `devops-tools`, whose one plugin, `devops-tools`, is the repository root. It ships three skills, each a thin guide around a subcommand:
+
+| Skill | Runs | Use |
+|---|---|---|
+| `/devops-tools:status-report` | `devops-tools status-report` | Where the work stands: branches against main (squash merges included), worktrees, pull requests, submodules, story issues in `doing` or `review`, the next `todo` per story, with suggested actions. Changes nothing. |
+| `/devops-tools:roadmap-order` | `devops-tools roadmap-order show\|write\|check` | `first`, `ready`, `wave N`, `blocked by`, and `critical` for every open issue, from its `Status` and `Needs` lines and the `Focus:` line; `write` regenerates the story table between `<!-- roadmap-order begin … -->` and `<!-- roadmap-order end -->`. |
+| `/devops-tools:fetch-docs` | `devops-tools fetch-docs url\|github\|vulkan-spec\|list` | Downloads docs, specs, and sources into the gitignored docs cache, pinned to a commit, to read and quote them exactly. |
+
+A skill runs `uvx --from "${CLAUDE_PLUGIN_ROOT}" devops-tools <subcommand>`: Claude Code substitutes the plugin's installed path into the skill text, and that path is this repository at the installed version, so the skill always runs the code it shipped with. The machine needs only uv. [V 2026-11-01: `${CLAUDE_PLUGIN_ROOT}` is substituted anywhere in a skill's Markdown body and is not set in the Bash tool's environment (code.claude.com plugin manifest reference); a plugin entry may use `"./"`, the marketplace root, as its source (marketplace reference); `claude plugin validate` passes; the plugin installs from a local marketplace and lists its three skills (Claude Code 2.1.316).]
+
+A project enables it in `.claude/settings.json`, pinning a release tag (a marketplace source takes a `ref`, not a `sha`; tags are never moved):
+
+```json
+{
+  "extraKnownMarketplaces": {
+    "devops-tools": {
+      "source": { "source": "github", "repo": "SETA1609/devops_tools", "ref": "v0.2.0" }
+    }
+  },
+  "enabledPlugins": { "devops-tools@devops-tools": true }
+}
+```
+
+The skills read these `[tool.devops-tools]` keys, all optional:
+
+```toml
+[tool.devops-tools]
+stories-directory = "docs/stories"           # one Markdown file per story track, plus done.md
+roadmap-file = "docs/roadmap.md"             # gets the generated story table
+focus-file = "docs/stories/README.md"        # holds the `Focus: AB, CD` line
+docs-cache-directory = "cache/docs"          # fetch-docs downloads, gitignore it
+```
+
+[U] Whether a fresh agent container installs the plugin without a manual step depends on its start script (Issue 7).
 
 ## Releases
 
