@@ -10,14 +10,14 @@ One issue is one pull request, on a branch named `issue-<n>-<slug>`. Numbers are
 
 ## Issue 2: Move the repository workflow scripts
 
-- Status: review
+- Status: done
 - Do: Add the three repository workflow tools as `devops-tools` subcommands, with their tests: `rebase-open-branches` (rebase each open pull request onto the main branch and push with `--force-with-lease`, keeping both sides of a `CHANGELOG.md` conflict where both only added lines), `changelog-fragments` (one `changes/<issue-id>.md` per pull request, moved into `CHANGELOG.md` at a release), and `check-submodule-pins` (every submodule pointer is a commit on its upstream branch). Read the main branch, the issue ID pattern, the changes directory, and the changelog file from a `[tool.devops-tools]` table in `pyproject.toml`.
 - Done when: the three subcommands pass their tests with default and project settings, and the README documents the settings table.
 
 ## Issue 3: Rebase fixes for squash merges, worktrees, and added lines
 
-- Status: todo
-- Do: `rebase-open-branches` skips a branch whose changes are already in the main branch (squash merged, then pushed again); never moves a local branch that is checked out in another worktree; and keeps both sides when two branches only add lines at the same place in any Markdown file listed in the settings, not only `CHANGELOG.md`.
+- Status: review
+- Do: `rebase-open-branches` skips a branch whose changes are already in the main branch (squash merged, then pushed again); never moves a local branch that is checked out in another worktree; and keeps both sides when two branches only add lines at the same place in any file matching a pattern in the `keep-both-added-lines` setting, not only the changelog.
 - Done when: a test covers each case.
 
 ## Issue 4: Reusable workflows

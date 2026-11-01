@@ -34,16 +34,38 @@ def build_repository_settings(table: dict[str, object], source_name: str) -> Rep
             f"{source_name}: unknown key(s) in [tool.devops-tools]: {', '.join(unknown_keys)}; "
             f"known: {', '.join(sorted(field_names_by_key))}"
         )
-    values: dict[str, str] = {}
+    default_settings = RepositorySettings()
+    values: dict[str, str | tuple[str, ...]] = {}
     for key, value in table.items():
+        field_name = field_names_by_key[key]
+        if isinstance(getattr(default_settings, field_name), tuple):
+            values[field_name] = convert_pattern_list(key, value, source_name)
+            continue
         if not isinstance(value, str) or not value:
             raise RepositorySettingsError(
                 f"{source_name}: [tool.devops-tools] {key} must be a non-empty string"
             )
-        values[field_names_by_key[key]] = value
+        values[field_name] = value
     settings = RepositorySettings(**values)
     validate_issue_id_pattern(settings.issue_id_pattern, source_name)
     return settings
+
+
+def convert_pattern_list(key: str, value: object, source_name: str) -> tuple[str, ...]:
+    """
+    A TOML list of gitattributes patterns → tuple. Patterns cannot hold whitespace, because
+    gitattributes splits a line on it.
+    """
+    is_valid_list = isinstance(value, list) and all(
+        isinstance(pattern, str) and pattern and not any(part.isspace() for part in pattern)
+        for pattern in value
+    )
+    if not is_valid_list:
+        raise RepositorySettingsError(
+            f"{source_name}: [tool.devops-tools] {key} must be a list of path patterns "
+            "without spaces"
+        )
+    return tuple(value)
 
 
 def validate_issue_id_pattern(issue_id_pattern: str, source_name: str) -> None:

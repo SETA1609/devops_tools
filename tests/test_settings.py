@@ -66,3 +66,15 @@ def test_read_repository_settings_rejects_bad_tables(tmp_path, table_text, expec
     write_pyproject(tmp_path, f"[tool.devops-tools]\n{table_text}")
     with pytest.raises(RepositorySettingsError, match=expected_message):
         read_repository_settings(tmp_path)
+
+
+def test_read_repository_settings_reads_a_list_of_patterns(tmp_path):
+    write_pyproject(tmp_path, '[tool.devops-tools]\nkeep-both-added-lines = ["docs/*.md"]\n')
+    assert read_repository_settings(tmp_path).keep_both_added_lines == ("docs/*.md",)
+
+
+@pytest.mark.parametrize("value_text", ['"docs/*.md"', '["docs/*.md", 3]', '[""]', '["a b.md"]'])
+def test_read_repository_settings_rejects_bad_pattern_lists(tmp_path, value_text):
+    write_pyproject(tmp_path, f"[tool.devops-tools]\nkeep-both-added-lines = {value_text}\n")
+    with pytest.raises(RepositorySettingsError, match="keep-both-added-lines"):
+        read_repository_settings(tmp_path)

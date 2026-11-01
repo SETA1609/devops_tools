@@ -435,3 +435,120 @@ def test_rebase_reports_a_bad_settings_file(tmp_path: Path, capsys) -> None:
     exit_code = REBASE.main(["--repository", str(repository), "--branches", "x", "--no-fetch"])
     assert exit_code == 2
     assert "unknown key" in capsys.readouterr().err
+
+
+def run_rebase_without_push(repository: Path, *branches: str) -> int:
+    return REBASE.main(
+        ["--repository", str(repository), "--branches", *branches, "--no-push", "--no-fetch"]
+    )
+
+
+def test_rebase_skips_a_branch_whose_changes_are_already_in_the_target(
+    tmp_path: Path, capsys
+) -> None:
+    repository = init_repository(tmp_path)
+    git(repository, "switch", "-c", "feature")
+    write(repository, "src/app.txt", "value = 2;\n")
+    commit_all(repository, "Feature step one")
+    write(repository, "src/new.txt", "new\n")
+    commit_all(repository, "Feature step two")
+    git(repository, "switch", "main")
+    write(repository, "src/app.txt", "value = 2;\n")
+    write(repository, "src/new.txt", "new\n")
+    commit_all(repository, "Feature (#7)")
+    write(repository, "docs/note.md", "# Note\n\nChanged after the squash merge.\n")
+    commit_all(repository, "Later work")
+    point_origin_at(repository, "main", "feature")
+    before = git(repository, "rev-parse", "feature").stdout.strip()
+
+    assert run_rebase_without_push(repository, "feature") == 0
+
+    assert git(repository, "rev-parse", "feature").stdout.strip() == before
+    assert "already in main" in capsys.readouterr().out
+
+
+def test_rebase_still_rebases_a_branch_with_one_change_not_in_the_target(tmp_path: Path) -> None:
+    repository = init_repository(tmp_path)
+    git(repository, "switch", "-c", "feature")
+    write(repository, "src/app.txt", "value = 2;\n")
+    write(repository, "src/new.txt", "new\n")
+    commit_all(repository, "Feature")
+    git(repository, "switch", "main")
+    write(repository, "src/app.txt", "value = 2;\n")
+    commit_all(repository, "Part of the feature")
+    point_origin_at(repository, "main", "feature")
+
+    assert run_rebase_without_push(repository, "feature") == 0
+
+    assert (
+        git(repository, "merge-base", "--is-ancestor", "main", "feature", check=False).returncode
+        == 0
+    )
+    assert git(repository, "show", "feature:src/new.txt").stdout == "new\n"
+
+
+def test_rebase_does_not_move_a_branch_checked_out_in_another_worktree(
+    tmp_path: Path, capsys
+) -> None:
+    repository = init_repository(tmp_path)
+    git(repository, "switch", "-c", "feature")
+    write(repository, "src/new.txt", "new\n")
+    commit_all(repository, "Feature")
+    git(repository, "switch", "main")
+    write(repository, "docs/note.md", "# Note\n\nMain moved on.\n")
+    commit_all(repository, "Main work")
+    point_origin_at(repository, "main", "feature")
+    git(repository, "worktree", "add", str(tmp_path / "feature-worktree"), "feature")
+    before = git(repository, "rev-parse", "feature").stdout.strip()
+
+    assert run_rebase_without_push(repository, "feature") == 0
+
+    assert git(repository, "rev-parse", "feature").stdout.strip() == before
+    output = capsys.readouterr().out
+    assert "checked out in" in output
+    assert "feature-worktree" in output
+
+
+def test_rebase_keeps_both_added_lines_in_files_from_the_settings(tmp_path: Path) -> None:
+    repository = init_repository(tmp_path)
+    write(
+        repository,
+        "pyproject.toml",
+        '[tool.devops-tools]\nkeep-both-added-lines = ["docs/stories/*.md"]\n',
+    )
+    write(repository, "docs/stories/tools.md", "# Tools\n\n#### AB-01 First\n- Status: done\n")
+    commit_all(repository, "Story file")
+    git(repository, "switch", "-c", "feature")
+    write(
+        repository,
+        "docs/stories/tools.md",
+        "# Tools\n\n#### AB-01 First\n- Status: done\n\n#### AB-02 From branch\n- Status: todo\n",
+    )
+    commit_all(repository, "Feature issue")
+    git(repository, "switch", "main")
+    write(
+        repository,
+        "docs/stories/tools.md",
+        "# Tools\n\n#### AB-01 First\n- Status: done\n\n#### AB-03 From main\n- Status: todo\n",
+    )
+    commit_all(repository, "Main issue")
+    point_origin_at(repository, "main", "feature")
+
+    assert run_rebase_without_push(repository, "feature") == 0
+
+    story = git(repository, "show", "feature:docs/stories/tools.md").stdout
+    assert "<<<<<<<" not in story
+    assert story.index("AB-02 From branch") < story.index("AB-03 From main")
+
+
+def test_rebase_leaves_added_lines_conflicts_in_files_not_in_the_settings(tmp_path: Path) -> None:
+    repository = init_repository(tmp_path)
+    git(repository, "switch", "-c", "feature")
+    write(repository, "docs/note.md", "# Note\n\nShared sentence.\n\nFrom branch.\n")
+    commit_all(repository, "Feature note")
+    git(repository, "switch", "main")
+    write(repository, "docs/note.md", "# Note\n\nShared sentence.\n\nFrom main.\n")
+    commit_all(repository, "Main note")
+    point_origin_at(repository, "main", "feature")
+
+    assert run_rebase_without_push(repository, "feature") == 1
