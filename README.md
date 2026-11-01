@@ -2,7 +2,7 @@
 
 Shared devops tooling for working with CI and containers, used by several repositories. Python 3.13, standard library only at runtime; a project needs only [uv](https://docs.astral.sh/uv/).
 
-It has timestamped run logs, log pruning, and three repository workflow tools: open pull request rebasing, changelog fragments, and a submodule pin check. Each has a reusable GitHub workflow. Planned: the container runner and agent skills as a Claude Code plugin. See `issues.md`.
+It has timestamped run logs, log pruning, and three repository workflow tools: open pull request rebasing, changelog fragments, and a submodule pin check. Each has a reusable GitHub workflow. It also runs a project's toolchain container. Planned: the agent container and agent skills as a Claude Code plugin. See `issues.md`.
 
 ## Install
 
@@ -153,6 +153,42 @@ jobs:
 ```
 
 The caller's `permissions` are the most a reusable workflow gets. Pushes the rebase makes with `GITHUB_TOKEN` do not trigger other workflows.
+
+## Toolchain container
+
+`devops-tools container [--repository PATH] [--settings-file PATH] <action> [args...]` runs the project's toolchain image as its `[tool.devops-tools.container]` table describes. Every run is logged to `cache/logs/` like `run`. The repository defaults to the git top level of the current directory.
+
+| Action | What it does |
+|---|---|
+| `image` | Build the image (checking the toolchain version first), prune dangling layers and build cache, print its id and size. |
+| `<name> [--keep-cache] [args...]` | Run a command named in `[tool.devops-tools.container.commands]`, with the extra arguments appended. Builds the image first if it is missing. |
+| `exec [--keep-cache] [--] <command...>` | Run any command in the container. |
+| `shell [--keep-cache]` | An interactive bash in the container. |
+| `prune` | Remove dangling images and unused build cache. Tagged images and volumes stay. |
+| `clean` | End of work only: remove `clean-directories`, the cache volume, then prune. Refuses symlinks, paths outside the checkout, and `protected-directories`. |
+
+The container runs as the host user (`CONTAINER_AS_ROOT=1` opts out) with a throwaway home. The checkout is mounted at its host path, and so is its git directory when that lives outside (a linked worktree, a submodule), so git works inside the container from any checkout. `IMAGE` overrides the image tag.
+
+```toml
+[tool.devops-tools.container]
+image = "example"                         # required; the tag is added
+dockerfile = "container/Dockerfile"       # default
+toolchain = "zig"                         # tag is example:zig-<version>
+version-file = ".zig-version"             # with version-argument: checked against
+version-argument = "ZIG_VERSION"          #   the Dockerfile's ARG and passed as --build-arg
+version-pins = [{ file = ".devcontainer/devcontainer.json", pattern = 'example:zig-([0-9.]+)' }]
+cache-environment-variable = "ZIG_GLOBAL_CACHE_DIR"  # throwaway under the home by default
+cache-volume = "example-zig-cache"        # used with --keep-cache
+read-only-symlink-mounts = ["references/data"]       # symlink targets mounted read-only
+clean-directories = ["zig-out", ".zig-cache"]
+protected-directories = ["references", "cache/logs"] # default: ["cache/logs"]
+
+[tool.devops-tools.container.commands]
+build = ["zig", "build"]
+test = ["zig", "build", "test"]
+```
+
+A wrapper script is one line: `exec uv run --project tools devops-tools container --settings-file tools/pyproject.toml build "$@"`.
 
 ## Releases
 

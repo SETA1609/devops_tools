@@ -11,9 +11,65 @@ from pathlib import Path
 from devops_tools.constants import (
     DEFAULT_CHANGELOG_FILE,
     DEFAULT_CHANGES_DIRECTORY,
+    DEFAULT_CONTAINER_HOME_DIRECTORY,
+    DEFAULT_DOCKERFILE,
     DEFAULT_ISSUE_ID_PATTERN,
     DEFAULT_MAIN_BRANCH,
+    DEFAULT_PROTECTED_DIRECTORIES,
 )
+
+
+@dataclass(frozen=True)
+class VersionPin:
+    """
+    A file that must name the toolchain version: `pattern` has one group that captures it.
+    """
+
+    file: str
+    pattern: str
+
+
+@dataclass(frozen=True)
+class ContainerSettings:
+    """
+    The `[tool.devops-tools.container]` table: what the toolchain container runner needs.
+    With `version_file`, the image tag is `<image>:<toolchain>-<version>` and the Dockerfile's
+    `ARG <version_argument>=` must match it; without, the tag is `<image>:latest`.
+    `commands` maps a subcommand name to the command it runs in the container.
+    Paths are relative to the repository root.
+    """
+
+    image: str
+    dockerfile: str = DEFAULT_DOCKERFILE
+    toolchain: str = "toolchain"
+    version_file: str | None = None
+    version_argument: str | None = None
+    version_pins: tuple[VersionPin, ...] = ()
+    home_directory: str = DEFAULT_CONTAINER_HOME_DIRECTORY
+    cache_environment_variable: str | None = None
+    cache_volume: str | None = None
+    read_only_symlink_mounts: tuple[str, ...] = ()
+    clean_directories: tuple[str, ...] = ()
+    protected_directories: tuple[str, ...] = DEFAULT_PROTECTED_DIRECTORIES
+    commands: tuple[tuple[str, tuple[str, ...]], ...] = ()
+
+
+@dataclass(frozen=True)
+class ContainerRunSettings:
+    """
+    What every `<binary> run` needs, whatever command it runs. `user_and_group_ids` is None to
+    run as root. `git_common_directory` is set when the git directory lives outside the
+    checkout (a worktree or a submodule), so it is mounted too. With `keep_cache`, the cache
+    lives in the named volume instead of the throwaway home.
+    """
+
+    container_binary: str
+    repository_root: Path
+    image: str
+    user_and_group_ids: tuple[int, int] | None
+    git_common_directory: Path | None
+    read_only_mount_paths: tuple[Path, ...]
+    keep_cache: bool = False
 
 
 @dataclass(frozen=True)
@@ -30,6 +86,7 @@ class RepositorySettings:
     changes_directory: str = DEFAULT_CHANGES_DIRECTORY
     changelog_file: str = DEFAULT_CHANGELOG_FILE
     keep_both_added_lines: tuple[str, ...] = ()
+    container: ContainerSettings | None = None
 
 
 @dataclass(frozen=True)
