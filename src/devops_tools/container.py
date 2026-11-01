@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import importlib.metadata
 import importlib.resources
+import json
 import os
 import re
 import shutil
@@ -18,9 +19,15 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from devops_tools.constants import (
+    AGENT_HOME_VOLUME_ENVIRONMENT_VARIABLE,
+    AGENT_IMAGE_DIRECTORY_NAME,
+    AGENT_IMAGE_OVERRIDE_ENVIRONMENT_VARIABLE,
+    AGENT_IMAGE_SUFFIX,
+    AGENT_SETUP_COMMANDS_ENVIRONMENT_VARIABLE,
     BASE_IMAGE_BUILD_ARGUMENT,
-    BASE_IMAGE_DOCKERFILE_NAME,
+    BASE_IMAGE_DIRECTORY_NAME,
     BASE_IMAGE_REPOSITORY,
+    CONTAINER_AGENT_HOME_DIRECTORY,
     CONTAINER_KEPT_CACHE_MOUNT,
     CONTENT_HASH_LENGTH,
     DEFAULT_IMAGE_TAG_WITHOUT_VERSION,
@@ -28,7 +35,9 @@ from devops_tools.constants import (
     DOCKERFILE_FROM_BASE_IMAGE_LINE,
     IMAGE_OVERRIDE_ENVIRONMENT_VARIABLE,
     KEEP_CACHE_FLAG,
+    REBUILD_AGENT_IMAGE_FLAG,
     RUN_AS_ROOT_ENVIRONMENT_VARIABLE,
+    SHIPPED_DOCKERFILE_NAME,
     SHIPPED_IMAGES_DIRECTORY_NAME,
     SUPPORTED_CONTAINER_BINARIES,
 )
@@ -113,11 +122,13 @@ def read_toolchain_version(
     return pinned_version
 
 
-def get_shipped_images_directory() -> Path:
+def get_shipped_images_directory(image_directory_name: str = BASE_IMAGE_DIRECTORY_NAME) -> Path:
     """
-    The directory in the installed package holding the shared Dockerfiles and their files.
+    The directory in the installed package holding one shared image's Dockerfile and files:
+    `base` (default) or `agent`.
     """
-    return Path(str(importlib.resources.files("devops_tools") / SHIPPED_IMAGES_DIRECTORY_NAME))
+    shipped_images = importlib.resources.files("devops_tools") / SHIPPED_IMAGES_DIRECTORY_NAME
+    return Path(str(shipped_images / image_directory_name))
 
 
 def compute_shipped_image_tag(images_directory: Path, image_repository: str) -> str:
@@ -144,7 +155,7 @@ def build_base_image_build_arguments(
 ) -> list[str]:
     return [
         container_binary, "build",
-        "--file", str(images_directory / BASE_IMAGE_DOCKERFILE_NAME),
+        "--file", str(images_directory / SHIPPED_DOCKERFILE_NAME),
         "--tag", base_image,
         str(images_directory),
     ]  # fmt: skip
@@ -418,3 +429,100 @@ def measure_volume_size_bytes(container_binary: str, image: str, volume_name: st
         return int(size_result.stdout.split()[0])
     except (IndexError, ValueError):
         return None
+
+
+def build_agent_image_tag(project_image: str) -> str:
+    """
+    `<project repository>-agent:<project tag>-<agent content hash>`, so a changed agent
+    Dockerfile or start script gets a new tag. `AGENT_IMAGE` overrides.
+    """
+    override_image = os.environ.get(AGENT_IMAGE_OVERRIDE_ENVIRONMENT_VARIABLE)
+    if override_image:
+        return override_image
+    project_repository, _, project_tag = project_image.rpartition(":")
+    shipped_tag = compute_shipped_image_tag(
+        get_shipped_images_directory(AGENT_IMAGE_DIRECTORY_NAME), "agent"
+    )
+    content_hash = shipped_tag.rsplit("-", 1)[-1]
+    return f"{project_repository}{AGENT_IMAGE_SUFFIX}:{project_tag}-{content_hash}"
+
+
+def get_agent_home_volume_name(container_settings: ContainerSettings) -> str:
+    return (
+        os.environ.get(AGENT_HOME_VOLUME_ENVIRONMENT_VARIABLE)
+        or container_settings.agent_home_volume
+    )
+
+
+def build_agent_image_build_arguments(
+    container_binary: str,
+    images_directory: Path,
+    agent_image: str,
+    project_image: str,
+    user_and_group_ids: tuple[int, int],
+    claude_code_version: str | None,
+) -> list[str]:
+    """
+    Build the shipped agent image on the project image, with the agent user at the host's ids.
+    """
+    user_id, group_id = user_and_group_ids
+    version_arguments = (
+        ["--build-arg", f"CLAUDE_CODE_VERSION={claude_code_version}"] if claude_code_version else []
+    )
+    return [
+        container_binary, "build",
+        "--file", str(images_directory / SHIPPED_DOCKERFILE_NAME),
+        "--build-arg", f"{BASE_IMAGE_BUILD_ARGUMENT}={project_image}",
+        "--build-arg", f"AGENT_USER_ID={user_id}",
+        "--build-arg", f"AGENT_GROUP_ID={group_id}",
+        *version_arguments,
+        "--tag", agent_image,
+        str(images_directory),
+    ]  # fmt: skip
+
+
+def build_agent_container_run_arguments(
+    run_settings: ContainerRunSettings,
+    container_settings: ContainerSettings,
+    home_volume_name: str,
+    agent_command: Sequence[str],
+    allocate_terminal: bool,
+) -> list[str]:
+    """
+    `<binary> run --rm -i` of the agent image. The image's own user has the host's ids, so no
+    `--user`; the home is the named volume; the start script gets the setup commands as JSON.
+    """
+    podman_arguments = ["--userns=keep-id"] if run_settings.container_binary == "podman" else []
+    setup_commands_json = json.dumps(
+        [list(command) for command in container_settings.agent_setup_commands]
+    )
+    return [
+        run_settings.container_binary, "run", "--rm", "-i",
+        *(["-t"] if allocate_terminal else []),
+        *podman_arguments,
+        "-v", f"{home_volume_name}:{CONTAINER_AGENT_HOME_DIRECTORY}",
+        "-e", f"{AGENT_SETUP_COMMANDS_ENVIRONMENT_VARIABLE}={setup_commands_json}",
+        *build_cache_arguments(container_settings, run_settings.keep_cache),
+        *build_checkout_mount_arguments(run_settings),
+        run_settings.image,
+        *agent_command,
+    ]  # fmt: skip
+
+
+def split_agent_leading_flags(extra_arguments: Sequence[str]) -> tuple[bool, bool, list[str]]:
+    """
+    (keep_cache, rebuild_agent_image, command): leading `--keep-cache` and `--rebuild-image`
+    in any order. Flags after the command are the command's.
+    """
+    remaining_arguments = list(extra_arguments)
+    keep_cache = False
+    rebuild_agent_image = False
+    while remaining_arguments and remaining_arguments[0] in (
+        KEEP_CACHE_FLAG,
+        REBUILD_AGENT_IMAGE_FLAG,
+    ):
+        if remaining_arguments.pop(0) == KEEP_CACHE_FLAG:
+            keep_cache = True
+        else:
+            rebuild_agent_image = True
+    return keep_cache, rebuild_agent_image, remaining_arguments

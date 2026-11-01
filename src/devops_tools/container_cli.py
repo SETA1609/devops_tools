@@ -8,6 +8,9 @@ Every run writes `<repository>/cache/logs/<utc-timestamp>-<action>.log`.
     exec [--keep-cache] [--] <command> [args...]
                                any command in the container
     shell [--keep-cache]       an interactive bash in the container
+    agent [--keep-cache] [--rebuild-image] [command...]
+                               the agent container (Claude Code, the agent's own logins);
+                               its start script installs declared plugins and setup commands
     prune                      remove dangling images and unused build cache
     clean                      end of work only: clean-directories, the cache volume, prune
 """
@@ -15,7 +18,9 @@ Every run writes `<repository>/cache/logs/<utc-timestamp>-<action>.log`.
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import functools
+import os
 import shlex
 import subprocess
 import sys
@@ -23,12 +28,17 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from devops_tools.constants import (
+    AGENT_IMAGE_DIRECTORY_NAME,
+    DEFAULT_AGENT_COMMAND,
     DEFAULT_LOG_DIRECTORY,
     EXIT_CODE_SETUP_ERROR,
     EXIT_CODE_USAGE_ERROR,
     KEEP_CACHE_FLAG,
 )
 from devops_tools.container import (
+    build_agent_container_run_arguments,
+    build_agent_image_build_arguments,
+    build_agent_image_tag,
     build_base_image_build_arguments,
     build_container_run_arguments,
     build_image_build_arguments,
@@ -45,11 +55,13 @@ from devops_tools.container import (
     does_container_object_exist,
     find_git_common_directory_outside,
     find_repository_root,
+    get_agent_home_volume_name,
     get_host_user_and_group_ids,
     get_shipped_images_directory,
     measure_volume_size_bytes,
     read_toolchain_version,
     resolve_read_only_mount_paths,
+    split_agent_leading_flags,
     split_keep_cache_flag,
 )
 from devops_tools.container_cleanup import (
@@ -378,6 +390,56 @@ def run_clean_action(
     return prune_exit_code
 
 
+def run_agent_action(
+    repository_root: Path,
+    container_settings: ContainerSettings,
+    action_arguments: list[str],
+    run_log: RunLog,
+) -> int:
+    """
+    Run a command (default bash) in the agent container. Builds the base, project, and agent
+    images when missing. The command owns the terminal, so only start and end are logged.
+    """
+    keep_cache, rebuild_agent_image, agent_command = split_agent_leading_flags(action_arguments)
+    run_settings, setup_exit_code = prepare_container_run(
+        repository_root, container_settings, keep_cache, run_log
+    )
+    if setup_exit_code != 0:
+        return setup_exit_code
+    container_binary = run_settings.container_binary
+    agent_image = build_agent_image_tag(run_settings.image)
+    if rebuild_agent_image or not does_container_object_exist(
+        container_binary, "image", agent_image
+    ):
+        run_log.write_line("run", f"building {agent_image} on {run_settings.image}")
+        build_exit_code = run_command_with_timestamped_output(
+            build_agent_image_build_arguments(
+                container_binary,
+                get_shipped_images_directory(AGENT_IMAGE_DIRECTORY_NAME),
+                agent_image,
+                run_settings.image,
+                (os.getuid(), os.getgid()),
+                container_settings.agent_claude_code_version,
+            ),
+            run_log,
+        )
+        if build_exit_code != 0:
+            return build_exit_code
+    home_volume_name = get_agent_home_volume_name(container_settings)
+    agent_command_line = build_agent_container_run_arguments(
+        dataclasses.replace(run_settings, image=agent_image),
+        container_settings,
+        home_volume_name,
+        agent_command or list(DEFAULT_AGENT_COMMAND),
+        allocate_terminal=sys.stdin.isatty(),
+    )
+    run_log.write_line("run", f"agent home volume: {home_volume_name}")
+    run_log.write_line("run", f"agent started: {shlex.join(agent_command_line)}")
+    agent_result = subprocess.run(agent_command_line, check=False)
+    run_log.write_line("run", f"agent ended, exit code: {agent_result.returncode}")
+    return agent_result.returncode
+
+
 BUILT_IN_ACTIONS_WITHOUT_ARGUMENTS: dict[str, ContainerActionFunction] = {
     "image": run_image_action,
     "prune": run_prune_action,
@@ -386,6 +448,7 @@ BUILT_IN_ACTIONS_WITHOUT_ARGUMENTS: dict[str, ContainerActionFunction] = {
 BUILT_IN_ACTIONS_WITH_ARGUMENTS: dict[str, ContainerActionFunction] = {
     "exec": run_exec_action,
     "shell": open_interactive_container_shell,
+    "agent": run_agent_action,
 }
 
 
@@ -429,7 +492,9 @@ def parse_container_arguments(argv: Sequence[str]) -> argparse.Namespace:
         type=Path,
         help="pyproject.toml with [tool.devops-tools.container] (default: the repository's own)",
     )
-    parser.add_argument("action", help="image, exec, shell, prune, clean, or a named command")
+    parser.add_argument(
+        "action", help="image, exec, shell, agent, prune, clean, or a named command"
+    )
     parser.add_argument("action_arguments", nargs=argparse.REMAINDER)
     return parser.parse_args(list(argv))
 

@@ -30,6 +30,7 @@ version-argument = "TOOL_VERSION"
 cache-environment-variable = "TOOL_CACHE_DIR"
 cache-volume = "example-cache"
 clean-directories = ["build-output"]
+agent-setup-commands = [["uv", "sync"]]
 
 [tool.devops-tools.container.commands]
 build = ["tool", "build"]
@@ -81,7 +82,7 @@ def test_a_named_command_builds_a_missing_image_and_keeps_the_cache(checkout, mo
     docker_calls = read_docker_calls(checkout)
     build_calls = [call for call in docker_calls if call.startswith("build ")]
     assert len(build_calls) == 2
-    assert "base.Dockerfile --tag devops-tools-base:" in build_calls[0]
+    assert "base/Dockerfile --tag devops-tools-base:" in build_calls[0]
     assert "--build-arg BASE_IMAGE=devops-tools-base:" in build_calls[1]
     assert "TOOL_VERSION=1.2.3 --tag example:tool-1.2.3" in build_calls[1]
     assert "volume create example-cache" in docker_calls
@@ -126,7 +127,7 @@ def test_clean_removes_build_directories_and_the_cache_volume(checkout):
 @pytest.mark.parametrize(
     ("arguments", "expected_message"),
     [
-        (["unknown"], "unknown container action 'unknown'; known: build, clean, exec"),
+        (["unknown"], "unknown container action 'unknown'; known: agent, build, clean"),
         (["image", "extra"], "image takes no arguments"),
     ],
 )
@@ -206,3 +207,27 @@ def test_a_dockerfile_not_built_on_the_base_image_is_refused_before_any_build(
     assert not any(call.startswith("build ") for call in read_docker_calls(checkout))
     (log_path,) = (checkout / "cache" / "logs").glob("*-build.log")
     assert "must build on the devops-tools base image" in log_path.read_text()
+
+
+def test_the_agent_action_builds_the_agent_image_on_the_project_image(checkout, monkeypatch):
+    """
+    What: the agent action.
+    When: every image is missing and a command follows the flags.
+    Then: base, project, and agent images are built in that order, the agent image on the
+    project image with the host's ids, and the run uses the home volume, passes the setup
+    commands as JSON, runs no `--user`, and ends with the command.
+    """
+    monkeypatch.setenv("FAKE_IMAGE_EXIT_CODE", "1")
+    monkeypatch.delenv("AGENT_HOME_VOLUME", raising=False)
+    monkeypatch.delenv("AGENT_IMAGE", raising=False)
+    assert run_container(checkout, "agent", "--rebuild-image", "claude", "--version") == 0
+    docker_calls = read_docker_calls(checkout)
+    build_calls = [call for call in docker_calls if call.startswith("build ")]
+    assert len(build_calls) == 3
+    assert "agent/Dockerfile --build-arg BASE_IMAGE=example:tool-1.2.3" in build_calls[2]
+    assert "--tag example-agent:tool-1.2.3-" in build_calls[2]
+    run_call = docker_calls[-1]
+    assert run_call.startswith("run --rm -i -v personal-agent-home:/home/agent")
+    assert 'DEVOPS_TOOLS_AGENT_SETUP_COMMANDS=[["uv", "sync"]]' in run_call
+    assert "--user" not in run_call
+    assert run_call.endswith("claude --version")

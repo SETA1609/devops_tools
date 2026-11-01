@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from devops_tools.constants import (
+    DEFAULT_AGENT_HOME_VOLUME,
     DEFAULT_CHANGELOG_FILE,
     DEFAULT_CHANGES_DIRECTORY,
     DEFAULT_CONTAINER_HOME_DIRECTORY,
@@ -36,6 +37,7 @@ class ContainerSettings:
     With `version_file`, the image tag is `<image>:<toolchain>-<version>` and the Dockerfile's
     `ARG <version_argument>=` must match it; without, the tag is `<image>:latest`.
     `commands` maps a subcommand name to the command it runs in the container.
+    `agent_setup_commands` run in the checkout each time the agent container starts.
     Paths are relative to the repository root.
     """
 
@@ -52,6 +54,9 @@ class ContainerSettings:
     clean_directories: tuple[str, ...] = ()
     protected_directories: tuple[str, ...] = DEFAULT_PROTECTED_DIRECTORIES
     commands: tuple[tuple[str, tuple[str, ...]], ...] = ()
+    agent_home_volume: str = DEFAULT_AGENT_HOME_VOLUME
+    agent_setup_commands: tuple[tuple[str, ...], ...] = ()
+    agent_claude_code_version: str | None = None
 
 
 @dataclass(frozen=True)
