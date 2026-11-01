@@ -21,13 +21,15 @@ class RepositorySettings:
     """
     The `[tool.devops-tools]` table of a project: what the repository workflow tools read.
     `issue_id_pattern` is a regular expression for one issue ID, without anchors or named groups.
-    Paths are relative to the repository root.
+    Paths are relative to the repository root. `keep_both_added_lines` holds gitattributes
+    patterns of more files whose added-lines conflicts the rebase resolves like the changelog's.
     """
 
     main_branch: str = DEFAULT_MAIN_BRANCH
     issue_id_pattern: str = DEFAULT_ISSUE_ID_PATTERN
     changes_directory: str = DEFAULT_CHANGES_DIRECTORY
     changelog_file: str = DEFAULT_CHANGELOG_FILE
+    keep_both_added_lines: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

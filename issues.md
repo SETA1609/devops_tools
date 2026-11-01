@@ -16,7 +16,7 @@ One issue is one pull request, on a branch named `issue-<n>-<slug>`. Numbers are
 
 ## Issue 3: Rebase fixes for squash merges, worktrees, and added lines
 
-- Status: doing
+- Status: review
 - Do: `rebase-open-branches` skips a branch whose changes are already in the main branch (squash merged, then pushed again); never moves a local branch that is checked out in another worktree; and keeps both sides when two branches only add lines at the same place in any file matching a pattern in the `keep-both-added-lines` setting, not only the changelog.
 - Done when: a test covers each case.
 

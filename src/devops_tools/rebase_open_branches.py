@@ -24,6 +24,7 @@ import sys
 import tempfile
 import urllib.error
 import urllib.request
+from collections.abc import Sequence
 from pathlib import Path
 
 from devops_tools.constants import (
@@ -206,15 +207,17 @@ def write_merged_changelog(base_path: str, target_path: str, branch_path: str) -
     return 0
 
 
-def build_attributes_block(changelog_file: str) -> str:
-    return (
-        f"{ATTRIBUTES_BEGIN}\n{changelog_file} merge={CHANGELOG_MERGE_DRIVER}\n{ATTRIBUTES_END}\n"
+def build_attributes_block(merged_file_patterns: Sequence[str]) -> str:
+    routed_lines = "".join(
+        f"{pattern} merge={CHANGELOG_MERGE_DRIVER}\n" for pattern in merged_file_patterns
     )
+    return f"{ATTRIBUTES_BEGIN}\n{routed_lines}{ATTRIBUTES_END}\n"
 
 
-def install_changelog_merge_driver(repository: str, changelog_file: str) -> None:
+def install_changelog_merge_driver(repository: str, merged_file_patterns: Sequence[str]) -> None:
     """
-    Register the merge driver and route `changelog_file` to it in `.git/info/attributes`.
+    Register the merge driver and route the changelog and the other `merged_file_patterns`
+    (gitattributes patterns) to it in `.git/info/attributes`.
     Git runs the driver as this module under the same Python, so it works from a uvx install.
     """
     driver = (
@@ -245,7 +248,7 @@ def install_changelog_merge_driver(repository: str, changelog_file: str) -> None
         with open(attributes_path, "a", encoding="utf-8") as handle:
             if existing and not existing.endswith("\n"):
                 handle.write("\n")
-            handle.write(build_attributes_block(changelog_file))
+            handle.write(build_attributes_block(merged_file_patterns))
 
 
 def remove_changelog_merge_driver(repository: str) -> None:
@@ -291,6 +294,52 @@ def local_branch_can_follow_remote(repository: str, branch: str, previous_remote
     return local.stdout.strip() == previous_remote_tip
 
 
+def branch_changes_are_in_target(
+    repository: str, branch_reference: str, target_reference: str
+) -> bool:
+    """
+    True when every file the branch changed since its merge base already has the branch's
+    content in the target, as after a squash merge. Commit-by-commit checks miss that case.
+    """
+    merge_base = run_git(repository, "merge-base", target_reference, branch_reference)
+    if merge_base.returncode != 0:
+        return False
+    changed_paths = run_git(
+        repository, "diff", "--name-only", "-z", merge_base.stdout.strip(), branch_reference
+    )
+    if changed_paths.returncode != 0:
+        return False
+    for path in filter(None, changed_paths.stdout.split("\0")):
+        branch_object = run_git(
+            repository, "rev-parse", "--verify", "--quiet", f"{branch_reference}:{path}"
+        )
+        target_object = run_git(
+            repository, "rev-parse", "--verify", "--quiet", f"{target_reference}:{path}"
+        )
+        if branch_object.stdout.strip() != target_object.stdout.strip():
+            return False
+    return True
+
+
+def find_branches_checked_out_in_other_worktrees(repository: str) -> dict[str, str]:
+    """
+    Branch name → worktree path, for every worktree of this repository except this checkout.
+    `git branch -f` refuses to move such a branch, and moving it would strand that worktree.
+    """
+    listing = run_git(repository, "worktree", "list", "--porcelain")
+    own_top_level = run_git(repository, "rev-parse", "--show-toplevel").stdout.strip()
+    branches_by_name: dict[str, str] = {}
+    worktree_path = ""
+    for line in listing.stdout.splitlines():
+        if line.startswith("worktree "):
+            worktree_path = line.removeprefix("worktree ")
+        elif line.startswith("branch refs/heads/") and os.path.realpath(
+            worktree_path
+        ) != os.path.realpath(own_top_level):
+            branches_by_name[line.removeprefix("branch refs/heads/")] = worktree_path
+    return branches_by_name
+
+
 def head_has_conflict_markers(repository: str) -> bool:
     completed = run_git(repository, "grep", "-l", "-E", r"^<<<<<<<", "HEAD")
     return completed.returncode == 0
@@ -301,6 +350,11 @@ def rebase_one_branch(repository: str, branch: str, target: str, push: bool) -> 
     print(f"==> Rebase {branch} onto {target}")
     remote_reference = f"refs/remotes/origin/{branch}"
     previous_remote_tip = run_git(repository, "rev-parse", remote_reference).stdout.strip()
+    if branch_changes_are_in_target(repository, f"origin/{branch}", f"origin/{target}"):
+        print(
+            f"  every change on {branch} is already in {target} (squash merged?) — left unchanged"
+        )
+        return True
     checkout = run_git(repository, "checkout", "--detach", f"origin/{branch}")
     if checkout.returncode != 0:
         print(checkout.stderr.strip() or checkout.stdout.strip())
@@ -317,7 +371,10 @@ def rebase_one_branch(repository: str, branch: str, target: str, push: bool) -> 
         return False
     if push and not push_rebased_branch(repository, branch):
         return False
-    if local_branch_can_follow_remote(repository, branch, previous_remote_tip):
+    other_worktree_path = find_branches_checked_out_in_other_worktrees(repository).get(branch)
+    if other_worktree_path is not None:
+        print(f"  local {branch} is checked out in {other_worktree_path} — left where it is")
+    elif local_branch_can_follow_remote(repository, branch, previous_remote_tip):
         run_git(repository, "branch", "-f", branch, "HEAD")
     else:
         print(f"  local {branch} has commits its remote does not — left where it is")
@@ -416,6 +473,7 @@ def rebase_branches(
     push: bool,
     fetch: bool,
     changelog_file: str = DEFAULT_CHANGELOG_FILE,
+    keep_both_added_lines: Sequence[str] = (),
 ) -> int:
     if not working_tree_is_clean(repository):
         print("The working tree has uncommitted changes to tracked files; commit or stash them.")
@@ -426,7 +484,7 @@ def rebase_branches(
             print(fetched.stderr.strip() or fetched.stdout.strip())
             return 1
     start = current_branch_name(repository)
-    install_changelog_merge_driver(repository, changelog_file)
+    install_changelog_merge_driver(repository, [changelog_file, *keep_both_added_lines])
     failures = 0
     try:
         configure_actions_identity(repository)
@@ -522,6 +580,7 @@ def main(argv: list[str] | None = None) -> int:
         push=not args.no_push,
         fetch=not args.no_fetch,
         changelog_file=settings.changelog_file,
+        keep_both_added_lines=settings.keep_both_added_lines,
     )
 
 

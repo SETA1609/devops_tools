@@ -4,6 +4,12 @@ Newest first. Each entry names its issue from `issues.md`.
 
 ## Unreleased
 
+### Issue 3: Rebase fixes for squash merges, worktrees, and added lines
+
+- `rebase-open-branches` skips a branch whose every changed file already has the branch's content in the main branch, as after a squash merge, instead of replaying it into conflicts.
+- It never moves a local branch that is checked out in another worktree; it says which worktree.
+- Setting `keep-both-added-lines`: a list of gitattributes patterns whose added-lines conflicts are resolved like the changelog's, both sides kept, the branch's first.
+
 ### Issue 2: Move the repository workflow scripts
 
 - Settings: a `[tool.devops-tools]` table in `pyproject.toml` (or `--settings-file`) sets the main branch, the issue ID pattern, the changes directory, and the changelog file. Unknown keys and bad patterns are errors.
