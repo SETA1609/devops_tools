@@ -22,7 +22,7 @@ One issue is one pull request, on a branch named `issue-<n>-<slug>`. Numbers are
 
 ## Issue 4: Reusable workflows
 
-- Status: review
+- Status: done
 - Do: Reusable GitHub workflows (`workflow_call`) for the three subcommands, installing uv with a pinned `astral-sh/setup-uv` and running `devops-tools` from a commit given by the caller. A caller workflow is a few lines.
 - Done when: each workflow passes a workflow lint and `tests/test_workflows.py`, and the README shows a caller for each.
 
@@ -31,3 +31,15 @@ One issue is one pull request, on a branch named `issue-<n>-<slug>`. Numbers are
 - Status: todo
 - Do: Give every existing test function a docstring with `What:`, `When:`, and `Then:` lines (rule in `AGENTS.md`). Add a test that fails when a test function lacks one.
 - Done when: every test has the docstring and the new check passes.
+
+## Issue 6: Toolchain container runner
+
+- Status: review
+- Do: Run a project's toolchain image from a `[tool.devops-tools.container]` table: build it with a checked toolchain version, run named commands and any command as the host user with a throwaway home and an opt-in cache volume, open a shell, prune, and clean build directories. Mount the checkout at its host path, and its git directory when that lives outside.
+- Done when: the runner is covered with a fake docker, and a real run of a project's toolchain image works from the main checkout and from a linked worktree.
+
+## Issue 7: Agent container with a start script
+
+- Status: todo
+- Do: `devops-tools container agent [command...]` builds the agent image on the toolchain image and runs it with the home in a named volume (`personal-agent-home` by default), so the agent's logins survive and never touch the host's. Before the command, a start script installs what the project declares and is missing: the marketplaces and plugins in `.claude/settings.json` (`claude plugin marketplace add`, `claude plugin install`) and the setup commands in the settings (for example `uv sync`).
+- Done when: the start script is covered with a fake `claude`, and a real agent container installs a declared plugin on first start with no manual step.

@@ -13,7 +13,12 @@ import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
-from devops_tools import changelog_fragments, check_submodule_pins, rebase_open_branches
+from devops_tools import (
+    changelog_fragments,
+    check_submodule_pins,
+    container_cli,
+    rebase_open_branches,
+)
 from devops_tools.constants import (
     DEFAULT_LOG_DIRECTORY,
     EXIT_CODE_SETUP_ERROR,
@@ -46,12 +51,16 @@ Repository workflow (settings: [tool.devops-tools] in pyproject.toml; --help on 
   changelog-fragments    check, preview, or release changes/<issue-id>.md fragments
   check-submodule-pins   check that every submodule pin is on its upstream branch
 
+Toolchain container (settings: [tool.devops-tools.container]; logged to cache/logs):
+  container <action>     image, exec, shell, prune, clean, or a named command
+
 Logs go to {LOG_DIRECTORY_FLAG} (default {DEFAULT_LOG_DIRECTORY} under the current directory)."""
 
 REPOSITORY_WORKFLOW_SUBCOMMANDS: dict[str, Callable[[list[str]], int]] = {
     "rebase-open-branches": rebase_open_branches.main,
     "changelog-fragments": changelog_fragments.main,
     "check-submodule-pins": check_submodule_pins.main,
+    "container": container_cli.main,
 }
 
 

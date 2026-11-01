@@ -4,6 +4,12 @@ Newest first. Each entry names its issue from `issues.md`.
 
 ## Unreleased
 
+### Issue 6: Toolchain container runner
+
+- `devops-tools container <action>`: `image`, `exec`, `shell`, `prune`, `clean`, and commands named in `[tool.devops-tools.container.commands]`, each logged to `cache/logs/`.
+- Settings table `[tool.devops-tools.container]`: image name, Dockerfile, toolchain version file checked against the Dockerfile's `ARG` and extra `version-pins`, cache variable and opt-in cache volume (`--keep-cache`), read-only symlink mounts, clean and protected directories.
+- The checkout is mounted at its host path, with its git directory when that lives outside (worktrees, submodules), and `safe.directory` set for it.
+
 ## v0.1.0 (2026-11-01)
 
 First release: run logs, log pruning, the three repository workflow tools with settings, and their reusable workflows.

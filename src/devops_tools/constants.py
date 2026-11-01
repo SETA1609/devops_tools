@@ -55,3 +55,18 @@ ATTRIBUTES_END = "# rebase-open-branches changelog-entries end"
 GITHUB_API_TIMEOUT_SECONDS = 30
 SAFE_BRANCH_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]*")
 LAST_UPDATED_TIMESTAMP_LINE = re.compile(r"^Last updated: (\S+)$", re.MULTILINE)
+
+# Container runner: `[tool.devops-tools.container]`
+CONTAINER_SETTINGS_TABLE_NAME = "container"
+DEFAULT_DOCKERFILE = "container/Dockerfile"
+DEFAULT_CONTAINER_HOME_DIRECTORY = "/tmp/container-home"
+CONTAINER_KEPT_CACHE_MOUNT = "/kept-cache"
+DEFAULT_PROTECTED_DIRECTORIES = ("cache/logs",)
+DEFAULT_IMAGE_TAG_WITHOUT_VERSION = "latest"
+SUPPORTED_CONTAINER_BINARIES = ("docker", "podman")
+KEEP_CACHE_FLAG = "--keep-cache"
+IMAGE_OVERRIDE_ENVIRONMENT_VARIABLE = "IMAGE"
+RUN_AS_ROOT_ENVIRONMENT_VARIABLE = "CONTAINER_AS_ROOT"
+BUILT_IN_CONTAINER_ACTIONS = ("image", "exec", "shell", "prune", "clean", "agent")
+CONTAINER_COMMAND_NAME_PATTERN = re.compile(r"[a-z][a-z0-9-]*")
+CONTAINER_IMAGE_NAME_PATTERN = re.compile(r"[a-z0-9][a-z0-9._/-]*")
