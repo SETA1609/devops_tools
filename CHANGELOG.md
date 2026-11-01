@@ -4,6 +4,13 @@ Newest first. Each entry names its issue from `issues.md`.
 
 ## Unreleased
 
+### Issue 2: Move the repository workflow scripts
+
+- Settings: a `[tool.devops-tools]` table in `pyproject.toml` (or `--settings-file`) sets the main branch, the issue ID pattern, the changes directory, and the changelog file. Unknown keys and bad patterns are errors.
+- `devops-tools rebase-open-branches`: rebases open pull requests onto the main branch and pushes with `--force-with-lease`; keeps both sides of a changelog conflict where both only added lines. Git runs the merge driver as `python -I -m devops_tools.rebase_open_branches`, so it works from a uvx install.
+- `devops-tools changelog-fragments check|preview|release`: one fragment per issue, moved into the changelog at a release. Branch names match the issue ID pattern ignoring case.
+- `devops-tools check-submodule-pins`: every submodule pin must be a commit on its upstream branch.
+
 ### Issue 1: Run logs and log pruning
 
 - Package `devops-tools` (import `devops_tools`), standard library only at runtime; uv, ruff, and pytest for development; CI runs tests, lint, and the format check.

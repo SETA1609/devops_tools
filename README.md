@@ -2,7 +2,7 @@
 
 Shared devops tooling for working with CI and containers, used by several repositories. Python 3.13, standard library only at runtime; a project needs only [uv](https://docs.astral.sh/uv/).
 
-Today it has timestamped run logs and log pruning. Planned: the container runner, repository workflow scripts (pull request rebasing, changelog fragments, submodule pin check) with reusable GitHub workflows, and agent skills as a Claude Code plugin. See `issues.md`.
+It has timestamped run logs, log pruning, and three repository workflow tools: open pull request rebasing, changelog fragments, and a submodule pin check. Planned: reusable GitHub workflows for those, the container runner, and agent skills as a Claude Code plugin. See `issues.md`.
 
 ## Install
 
@@ -64,6 +64,34 @@ sys.exit(exit_code)
 ```
 
 Pruning is in `devops_tools.run_log_cleanup`: `select_run_log_files_to_remove` returns the `*.log` files directly in the directory that are old enough, and never other files, subdirectories, symlinks, or the current run's log.
+
+## Repository workflow
+
+These print plain output for CI; wrap one in `devops-tools run <name> -- ...` to log it.
+
+| Subcommand | What it does |
+|---|---|
+| `rebase-open-branches` | Rebases each open pull request from this repository onto the main branch and pushes with `--force-with-lease`. A changelog conflict where both sides only added lines keeps both, the branch's entries first, with the newer `Last updated:` timestamp. Any other conflict leaves that branch for a person. Needs `GITHUB_REPOSITORY` and `GITHUB_TOKEN`, or `--branches NAME...` to run locally. |
+| `changelog-fragments check [--branch B]` | Each pull request adds `changes/<issue-id>.md` instead of editing the changelog. Checks every fragment, and with `--branch` that the branch's issue has one. |
+| `changelog-fragments preview` | Prints the unreleased entries, newest first. |
+| `changelog-fragments release --section-title T` | Moves the fragments into the changelog under `## T`, with `(#N)` from squash merge subjects, and deletes them. |
+| `check-submodule-pins [--json]` | Checks that every submodule pointer is a commit on its upstream branch, not only on a pull request ref. Suggests a commit on the branch with the same tree. |
+
+All three take `--repository PATH` (default: the current directory) and `--settings-file PATH`.
+
+### Settings
+
+A project sets them in a `[tool.devops-tools]` table, read from `<repository>/pyproject.toml` or from `--settings-file`. Every key is optional; unknown keys are an error.
+
+```toml
+[tool.devops-tools]
+main-branch = "main"                                       # rebase target
+issue-id-pattern = '[A-Za-z][A-Za-z0-9]*(?:\.[0-9]+)?-[0-9]+'  # one issue ID, no anchors
+changes-directory = "changes"                              # fragments
+changelog-file = "CHANGELOG.md"                            # fragments and the rebase merge driver
+```
+
+Branch names are `<issue-id>-<slug>` or `agent/<agent-name>/<issue-id>-<slug>`, matched ignoring case.
 
 ## Development
 
