@@ -15,3 +15,9 @@ class CommandLineUsageError(Exception):
     """
     The command line is not one `devops-tools` accepts. The message says what is wrong.
     """
+
+
+class RepositorySettingsError(Exception):
+    """
+    The `[tool.devops-tools]` table cannot be used. The message names the file and the key.
+    """
