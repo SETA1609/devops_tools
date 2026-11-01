@@ -4,6 +4,12 @@ Newest first. Each entry names its issue from `issues.md`.
 
 ## Unreleased
 
+### Issue 7: Agent container with a start script
+
+- `devops-tools container agent [--keep-cache] [--rebuild-image] [command...]` builds the shipped agent image (Node, Claude Code, an `agent` user with the host's ids) on the project image and runs it with the home in a named volume (`personal-agent-home` by default).
+- Its start script installs, on every start, the marketplaces and enabled plugins from `.claude/settings.json` that are missing (`claude plugin marketplace add owner/repo#ref`, `claude plugin install`), then runs `agent-setup-commands`; a failed step is reported and retried next start.
+- Settings `agent-home-volume`, `agent-setup-commands`, `agent-claude-code-version`. The shipped images now live in `container_images/base/` and `container_images/agent/`, each tagged by its own content hash.
+
 ### Issue 8: Shared base image
 
 - The package ships `devops-tools-base` (Ubuntu, git, python3, uv, a uv-managed Python 3.13, and an entrypoint) and no language toolchain. `devops-tools container` builds it locally, tagged with the package version and a content hash, and passes it to the project build as `BASE_IMAGE`; `image` always rebuilds it.

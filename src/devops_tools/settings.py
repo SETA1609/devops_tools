@@ -145,6 +145,24 @@ def read_container_commands(
     return tuple(commands)
 
 
+def read_agent_setup_commands(value: object, source_name: str) -> tuple[tuple[str, ...], ...]:
+    """
+    `[["uv", "sync"]]` → (("uv", "sync"),): each command a non-empty list of strings.
+    """
+    is_valid = isinstance(value, list) and all(
+        isinstance(command, list)
+        and command
+        and all(isinstance(part, str) and part for part in command)
+        for command in value
+    )
+    if not is_valid:
+        raise RepositorySettingsError(
+            f"{source_name}: [tool.devops-tools.container] agent-setup-commands must be a list "
+            "of non-empty lists of strings"
+        )
+    return tuple(tuple(command) for command in value)
+
+
 def build_container_settings(table: dict[str, object], source_name: str) -> ContainerSettings:
     """
     ContainerSettings from the `[tool.devops-tools.container]` table, with cross-key checks.
@@ -152,9 +170,10 @@ def build_container_settings(table: dict[str, object], source_name: str) -> Cont
     string_keys = {
         "image", "dockerfile", "toolchain", "version-file", "version-argument",
         "home-directory", "cache-environment-variable", "cache-volume",
+        "agent-home-volume", "agent-claude-code-version",
     }  # fmt: skip
     list_keys = {"read-only-symlink-mounts", "clean-directories", "protected-directories"}
-    known_keys = string_keys | list_keys | {"version-pins", "commands"}
+    known_keys = string_keys | list_keys | {"version-pins", "commands", "agent-setup-commands"}
     unknown_keys = sorted(set(table) - known_keys)
     if unknown_keys:
         raise RepositorySettingsError(
@@ -172,6 +191,10 @@ def build_container_settings(table: dict[str, object], source_name: str) -> Cont
         values["version_pins"] = read_version_pins(table["version-pins"], source_name)
     if "commands" in table:
         values["commands"] = read_container_commands(table["commands"], source_name)
+    if "agent-setup-commands" in table:
+        values["agent_setup_commands"] = read_agent_setup_commands(
+            table["agent-setup-commands"], source_name
+        )
     container_settings = ContainerSettings(**values)  # type: ignore[arg-type]
     if not CONTAINER_IMAGE_NAME_PATTERN.fullmatch(container_settings.image):
         raise RepositorySettingsError(

@@ -90,6 +90,8 @@ def test_container_table_with_only_an_image_uses_the_defaults(tmp_path):
         ("image = 'e'\ncommands = { Build = ['x'] }\n", "lowercase"),
         ("image = 'e'\ncommands = { build = [] }\n", "non-empty list of strings"),
         ("image = 'e'\ncommands = ['x']\n", "must be a table"),
+        ("image = 'e'\nagent-setup-commands = ['uv sync']\n", "agent-setup-commands"),
+        ("image = 'e'\nagent-setup-commands = [[]]\n", "agent-setup-commands"),
     ],
 )
 def test_container_table_rejects_bad_settings(tmp_path, table_text, expected_message):
@@ -100,3 +102,20 @@ def test_container_table_rejects_bad_settings(tmp_path, table_text, expected_mes
     """
     with pytest.raises(RepositorySettingsError, match=expected_message):
         read_container_table(tmp_path, f"[tool.devops-tools.container]\n{table_text}")
+
+
+def test_container_table_reads_the_agent_keys(tmp_path):
+    """
+    What: the agent keys of [tool.devops-tools.container].
+    When: the home volume, setup commands, and Claude Code version are set.
+    Then: they land in ContainerSettings, setup commands as tuples in order.
+    """
+    container_settings = read_container_table(
+        tmp_path,
+        "[tool.devops-tools.container]\nimage = 'e'\nagent-home-volume = 'my-home'\n"
+        "agent-setup-commands = [['uv', 'sync'], ['git', 'fetch']]\n"
+        "agent-claude-code-version = '2.1.316'\n",
+    )
+    assert container_settings.agent_home_volume == "my-home"
+    assert container_settings.agent_setup_commands == (("uv", "sync"), ("git", "fetch"))
+    assert container_settings.agent_claude_code_version == "2.1.316"
