@@ -4,7 +4,9 @@ Types shared by the devops_tools modules: dataclasses and type aliases.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
+from pathlib import Path
 
 from devops_tools.constants import (
     DEFAULT_CHANGELOG_FILE,
@@ -26,3 +28,39 @@ class RepositorySettings:
     issue_id_pattern: str = DEFAULT_ISSUE_ID_PATTERN
     changes_directory: str = DEFAULT_CHANGES_DIRECTORY
     changelog_file: str = DEFAULT_CHANGELOG_FILE
+
+
+@dataclass(frozen=True)
+class FragmentPatterns:
+    """
+    The issue ID pattern compiled into the three places a fragment check looks for an ID:
+    the file name `<issue-id>.md`, the heading `### <issue-id> <title>`, and a branch name
+    `<issue-id>-<slug>` or `agent/<agent-name>/<issue-id>-<slug>`.
+    """
+
+    file_name: re.Pattern[str]
+    heading: re.Pattern[str]
+    branch_issue_id: re.Pattern[str]
+
+
+@dataclass(frozen=True)
+class ChangelogFragment:
+    """
+    One `<changes-directory>/<issue-id>.md` file: its issue, title, and full text.
+    """
+
+    path: Path
+    issue_id: str
+    title: str
+    text: str
+
+
+@dataclass(frozen=True)
+class FragmentCommit:
+    """
+    The commit that added a fragment: when, and the pull request number from a squash merge.
+    """
+
+    commit_sha: str
+    committed_at_unix_seconds: int
+    pull_request_number: int | None

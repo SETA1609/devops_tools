@@ -4,6 +4,8 @@ Constants shared by the devops_tools modules.
 
 from __future__ import annotations
 
+import re
+
 # Run log
 RUN_LOG_FILE_SUFFIX = ".log"
 OLDER_THAN_DAYS_FLAG = "--older-than-days"
@@ -28,3 +30,9 @@ DEFAULT_MAIN_BRANCH = "main"
 DEFAULT_ISSUE_ID_PATTERN = r"[A-Za-z][A-Za-z0-9]*(?:\.[0-9]+)?-[0-9]+"
 DEFAULT_CHANGES_DIRECTORY = "changes"
 DEFAULT_CHANGELOG_FILE = "CHANGELOG.md"
+
+# Changelog fragments
+CHANGES_README_FILE_NAME = "README.md"
+PULL_REQUEST_NUMBER_IN_SUBJECT = re.compile(r"\(#(?P<number>[0-9]+)\)\s*$")
+CHANGELOG_LAST_UPDATED_LINE = re.compile(r"^Last updated: \S+$", re.MULTILINE)
+CHANGELOG_SECTION_HEADING = re.compile(r"^## ", re.MULTILINE)
