@@ -7,6 +7,9 @@ The checkout is mounted at its host path, and so is its git directory when that 
 
 from __future__ import annotations
 
+import hashlib
+import importlib.metadata
+import importlib.resources
 import os
 import re
 import shutil
@@ -15,11 +18,18 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from devops_tools.constants import (
+    BASE_IMAGE_BUILD_ARGUMENT,
+    BASE_IMAGE_DOCKERFILE_NAME,
+    BASE_IMAGE_REPOSITORY,
     CONTAINER_KEPT_CACHE_MOUNT,
+    CONTENT_HASH_LENGTH,
     DEFAULT_IMAGE_TAG_WITHOUT_VERSION,
+    DOCKERFILE_BASE_IMAGE_ARGUMENT_LINE,
+    DOCKERFILE_FROM_BASE_IMAGE_LINE,
     IMAGE_OVERRIDE_ENVIRONMENT_VARIABLE,
     KEEP_CACHE_FLAG,
     RUN_AS_ROOT_ENVIRONMENT_VARIABLE,
+    SHIPPED_IMAGES_DIRECTORY_NAME,
     SUPPORTED_CONTAINER_BINARIES,
 )
 from devops_tools.exceptions import ContainerSetupError
@@ -101,6 +111,64 @@ def read_toolchain_version(
                 f"pins {pin_match.group(1)}"
             )
     return pinned_version
+
+
+def get_shipped_images_directory() -> Path:
+    """
+    The directory in the installed package holding the shared Dockerfiles and their files.
+    """
+    return Path(str(importlib.resources.files("devops_tools") / SHIPPED_IMAGES_DIRECTORY_NAME))
+
+
+def compute_shipped_image_tag(images_directory: Path, image_repository: str) -> str:
+    """
+    `<repository>:<package version>-<content hash>`: the hash covers every file in the shipped
+    images directory, so a changed Dockerfile gets a new tag and is rebuilt.
+    """
+    try:
+        package_version = importlib.metadata.version("devops-tools")
+    except importlib.metadata.PackageNotFoundError:
+        package_version = "0"
+    content_hash = hashlib.sha256()
+    for file_path in sorted(path for path in images_directory.iterdir() if path.is_file()):
+        content_hash.update(file_path.name.encode("utf-8") + b"\0" + file_path.read_bytes())
+    return f"{image_repository}:{package_version}-{content_hash.hexdigest()[:CONTENT_HASH_LENGTH]}"
+
+
+def compute_base_image_tag(images_directory: Path) -> str:
+    return compute_shipped_image_tag(images_directory, BASE_IMAGE_REPOSITORY)
+
+
+def build_base_image_build_arguments(
+    container_binary: str, images_directory: Path, base_image: str
+) -> list[str]:
+    return [
+        container_binary, "build",
+        "--file", str(images_directory / BASE_IMAGE_DOCKERFILE_NAME),
+        "--tag", base_image,
+        str(images_directory),
+    ]  # fmt: skip
+
+
+def check_dockerfile_builds_on_base_image(
+    repository_root: Path, container_settings: ContainerSettings
+) -> None:
+    """
+    The project Dockerfile must declare `ARG BASE_IMAGE` and build a stage `FROM ${BASE_IMAGE}`,
+    so every project image carries the shared tooling and adds only its own toolchain.
+    """
+    dockerfile_path = repository_root / container_settings.dockerfile
+    try:
+        dockerfile_text = dockerfile_path.read_text(encoding="utf-8")
+    except OSError as read_error:
+        raise ContainerSetupError(f"cannot read {dockerfile_path}: {read_error}") from read_error
+    if not DOCKERFILE_BASE_IMAGE_ARGUMENT_LINE.search(
+        dockerfile_text
+    ) or not DOCKERFILE_FROM_BASE_IMAGE_LINE.search(dockerfile_text):
+        raise ContainerSetupError(
+            f"{dockerfile_path} must build on the devops-tools base image: declare "
+            "`ARG BASE_IMAGE` before the first FROM and build a stage `FROM ${BASE_IMAGE}`"
+        )
 
 
 def build_image_tag(container_settings: ContainerSettings, toolchain_version: str | None) -> str:
@@ -188,6 +256,7 @@ def build_image_build_arguments(
     container_settings: ContainerSettings,
     image: str,
     toolchain_version: str | None,
+    base_image: str,
 ) -> list[str]:
     version_arguments: list[str] = []
     if toolchain_version is not None and container_settings.version_argument is not None:
@@ -197,6 +266,7 @@ def build_image_build_arguments(
     return [
         container_binary, "build",
         "--file", str(repository_root / container_settings.dockerfile),
+        "--build-arg", f"{BASE_IMAGE_BUILD_ARGUMENT}={base_image}",
         *version_arguments,
         "--tag", image,
         str(repository_root),

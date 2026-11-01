@@ -4,12 +4,16 @@ from pathlib import Path
 import pytest
 
 from devops_tools.container import (
+    build_base_image_build_arguments,
     build_container_run_arguments,
     build_image_build_arguments,
     build_image_tag,
+    check_dockerfile_builds_on_base_image,
+    compute_base_image_tag,
     detect_container_binary,
     find_git_common_directory_outside,
     find_repository_root,
+    get_shipped_images_directory,
     read_toolchain_version,
     resolve_read_only_mount_paths,
     split_keep_cache_flag,
@@ -127,13 +131,15 @@ def test_build_image_build_arguments_pass_the_version_build_argument(tmp_path):
     """
     What: build_image_build_arguments.
     When: a toolchain version is known.
-    Then: the build gets `--build-arg <version-argument>=<version>` and the configured Dockerfile.
+    Then: the build gets the base image and `<version-argument>=<version>` as build arguments,
+    and the configured Dockerfile.
     """
     assert build_image_build_arguments(
-        "docker", tmp_path, VERSIONED_SETTINGS, "example:zig-1.2.3", "1.2.3"
+        "docker", tmp_path, VERSIONED_SETTINGS, "example:zig-1.2.3", "1.2.3", "base:1"
     ) == [
         "docker", "build",
         "--file", str(tmp_path / "container/Dockerfile"),
+        "--build-arg", "BASE_IMAGE=base:1",
         "--build-arg", "TOOL_VERSION=1.2.3",
         "--tag", "example:zig-1.2.3",
         str(tmp_path),
@@ -305,3 +311,73 @@ def test_select_paths_to_remove_refuses_unsafe_paths(
     (tmp_path / "linked").symlink_to(tmp_path / "cache")
     with pytest.raises(CleanupRefusedError, match=expected_message):
         select_paths_to_remove(tmp_path, [tmp_path / candidate_relative_path], ["cache/logs"])
+
+
+def test_the_package_ships_the_base_image_files():
+    """
+    What: get_shipped_images_directory.
+    When: the package is installed.
+    Then: it holds the base Dockerfile and the entrypoint, and the Dockerfile adds no toolchain
+    beyond Python, uv, and git.
+    """
+    images_directory = get_shipped_images_directory()
+    base_dockerfile_text = (images_directory / "base.Dockerfile").read_text()
+    assert (images_directory / "entrypoint.sh").is_file()
+    assert "uv python install" in base_dockerfile_text
+    assert "ENTRYPOINT" in base_dockerfile_text
+    for toolchain_word in ("zig", "clang", "openjdk", "golang"):
+        assert toolchain_word not in base_dockerfile_text.lower()
+
+
+def test_compute_base_image_tag_changes_with_the_shipped_files(tmp_path):
+    """
+    What: compute_base_image_tag.
+    When: a file in the images directory changes.
+    Then: the tag keeps its repository and version but gets a new content hash.
+    """
+    (tmp_path / "base.Dockerfile").write_text("FROM scratch\n")
+    first_tag = compute_base_image_tag(tmp_path)
+    (tmp_path / "base.Dockerfile").write_text("FROM scratch\nRUN true\n")
+    second_tag = compute_base_image_tag(tmp_path)
+    assert first_tag.startswith("devops-tools-base:")
+    assert first_tag.rsplit("-", 1)[0] == second_tag.rsplit("-", 1)[0]
+    assert first_tag != second_tag
+
+
+def test_build_base_image_build_arguments_use_the_shipped_directory_as_context(tmp_path):
+    """
+    What: build_base_image_build_arguments.
+    When: the base image is built.
+    Then: the shipped directory is the build context and holds the Dockerfile.
+    """
+    assert build_base_image_build_arguments("podman", tmp_path, "devops-tools-base:1-abc") == [
+        "podman", "build",
+        "--file", str(tmp_path / "base.Dockerfile"),
+        "--tag", "devops-tools-base:1-abc",
+        str(tmp_path),
+    ]  # fmt: skip
+
+
+@pytest.mark.parametrize(
+    ("dockerfile_text", "is_accepted"),
+    [
+        ("ARG BASE_IMAGE\nFROM ${BASE_IMAGE}\nRUN true\n", True),
+        ("ARG BASE_IMAGE\nFROM ubuntu AS download\nFROM ${BASE_IMAGE}\n", True),
+        ("FROM ubuntu:24.04\n", False),
+        ("ARG BASE_IMAGE\nFROM ubuntu:24.04\n", False),
+        ("FROM ${BASE_IMAGE}\n", False),
+    ],
+)
+def test_check_dockerfile_builds_on_base_image(tmp_path, dockerfile_text, is_accepted):
+    """
+    What: check_dockerfile_builds_on_base_image.
+    When: the project Dockerfile does or does not declare BASE_IMAGE and build a stage on it.
+    Then: it is accepted, or refused with a message that shows the two lines to add.
+    """
+    write_versioned_checkout(tmp_path)
+    (tmp_path / "container" / "Dockerfile").write_text(dockerfile_text)
+    if is_accepted:
+        check_dockerfile_builds_on_base_image(tmp_path, VERSIONED_SETTINGS)
+        return
+    with pytest.raises(ContainerSetupError, match=r"ARG BASE_IMAGE.*FROM \$\{BASE_IMAGE\}"):
+        check_dockerfile_builds_on_base_image(tmp_path, VERSIONED_SETTINGS)

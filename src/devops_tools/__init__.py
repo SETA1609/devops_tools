@@ -1,3 +1,3 @@
 """
-Shared devops tooling: timestamped run logs and log pruning.
+Shared devops tooling: run logs, repository workflow tools, and the container runner.
 """

@@ -19,6 +19,8 @@ esac
 exit 0
 """
 
+PROJECT_DOCKERFILE = "ARG BASE_IMAGE\nFROM ${BASE_IMAGE}\nARG TOOL_VERSION=1.2.3\n"
+
 PROJECT_SETTINGS = """
 [tool.devops-tools.container]
 image = "example"
@@ -43,7 +45,7 @@ def checkout(tmp_path, monkeypatch):
     (repository_root / "container").mkdir(parents=True)
     (repository_root / "pyproject.toml").write_text(PROJECT_SETTINGS)
     (repository_root / ".tool-version").write_text("1.2.3\n")
-    (repository_root / "container" / "Dockerfile").write_text("ARG TOOL_VERSION=1.2.3\n")
+    (repository_root / "container" / "Dockerfile").write_text(PROJECT_DOCKERFILE)
     fake_binary_directory = tmp_path / "bin"
     fake_binary_directory.mkdir()
     fake_docker_path = fake_binary_directory / "docker"
@@ -69,17 +71,19 @@ def test_a_named_command_builds_a_missing_image_and_keeps_the_cache(checkout, mo
     """
     What: a named command from [tool.devops-tools.container.commands].
     When: the image and the cache volume are missing and `--keep-cache` comes first.
-    Then: the image is built with the version argument, the volume is created and handed to
-    the host user, and the command runs with its extra arguments at the checkout's host path.
+    Then: the shared base image is built, then the project image on it with the version
+    argument, the volume is created and handed to the host user, and the command runs with its
+    extra arguments at the checkout's host path.
     """
     monkeypatch.setenv("FAKE_IMAGE_EXIT_CODE", "1")
     monkeypatch.setenv("FAKE_VOLUME_EXIT_CODE", "1")
     assert run_container(checkout, "build", "--keep-cache", "-Drelease") == 0
     docker_calls = read_docker_calls(checkout)
-    assert any(
-        call.startswith("build --file") and "TOOL_VERSION=1.2.3 --tag example:tool-1.2.3" in call
-        for call in docker_calls
-    )
+    build_calls = [call for call in docker_calls if call.startswith("build ")]
+    assert len(build_calls) == 2
+    assert "base.Dockerfile --tag devops-tools-base:" in build_calls[0]
+    assert "--build-arg BASE_IMAGE=devops-tools-base:" in build_calls[1]
+    assert "TOOL_VERSION=1.2.3 --tag example:tool-1.2.3" in build_calls[1]
     assert "volume create example-cache" in docker_calls
     assert any("--entrypoint chown" in call for call in docker_calls)
     run_call = docker_calls[-1]
@@ -168,7 +172,37 @@ def test_a_version_mismatch_is_logged_as_a_setup_error(checkout):
     When: the Dockerfile pins another toolchain version than the version file.
     Then: it exits 1 and the run log names both versions.
     """
-    (checkout / "container" / "Dockerfile").write_text("ARG TOOL_VERSION=9.9.9\n")
+    (checkout / "container" / "Dockerfile").write_text(PROJECT_DOCKERFILE.replace("1.2.3", "9.9.9"))
     assert run_container(checkout, "build") == 1
     (log_path,) = (checkout / "cache" / "logs").glob("*-build.log")
     assert "1.2.3 but" in log_path.read_text()
+
+
+def test_the_image_action_always_rebuilds_the_base_image(checkout):
+    """
+    What: the image action.
+    When: the base image and the project image already exist.
+    Then: both are built again (the cache makes that cheap), then pruned and summarized.
+    """
+    assert run_container(checkout, "image") == 0
+    build_calls = [call for call in read_docker_calls(checkout) if call.startswith("build ")]
+    assert len(build_calls) == 2
+    assert "image prune -f" in read_docker_calls(checkout)
+
+
+def test_a_dockerfile_not_built_on_the_base_image_is_refused_before_any_build(
+    checkout, monkeypatch
+):
+    """
+    What: the container CLI.
+    When: the image is missing and the project Dockerfile starts from its own base image.
+    Then: it exits 1, the log says how to build on BASE_IMAGE, and nothing is built.
+    """
+    monkeypatch.setenv("FAKE_IMAGE_EXIT_CODE", "1")
+    (checkout / "container" / "Dockerfile").write_text(
+        "FROM ubuntu:24.04\nARG TOOL_VERSION=1.2.3\n"
+    )
+    assert run_container(checkout, "build") == 1
+    assert not any(call.startswith("build ") for call in read_docker_calls(checkout))
+    (log_path,) = (checkout / "cache" / "logs").glob("*-build.log")
+    assert "must build on the devops-tools base image" in log_path.read_text()
