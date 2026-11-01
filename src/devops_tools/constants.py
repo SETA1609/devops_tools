@@ -47,3 +47,11 @@ UPSTREAM_REMOTE_NAME = "upstream"
 UPSTREAM_BRANCH_REFERENCE = "refs/remotes/upstream/pinned-branch"
 SHORT_COMMIT_LENGTH = 12
 GIT_TIMEOUT_SECONDS = 300
+
+# Rebase open branches
+CHANGELOG_MERGE_DRIVER = "changelog-entries"
+ATTRIBUTES_BEGIN = "# rebase-open-branches changelog-entries begin"
+ATTRIBUTES_END = "# rebase-open-branches changelog-entries end"
+GITHUB_API_TIMEOUT_SECONDS = 30
+SAFE_BRANCH_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]*")
+LAST_UPDATED_TIMESTAMP_LINE = re.compile(r"^Last updated: (\S+)$", re.MULTILINE)
