@@ -1,6 +1,6 @@
 [project]
 name = "devops-tools"
-version = "0.2.0"
+version = "0.3.0"
 description = "Shared devops tooling: timestamped run logs, log pruning, and repository workflow helpers."
 readme = "README.md"
 license = "MIT"

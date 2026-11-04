@@ -113,7 +113,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   rebase-open-branches:
-    uses: SETA1609/devops_tools/.github/workflows/rebase-open-branches.yml@<sha> # v0.2.0
+    uses: SETA1609/devops_tools/.github/workflows/rebase-open-branches.yml@<sha> # v0.3.0
     with:
       devops-tools-version: <sha>
       settings-file: tools/pyproject.toml
@@ -129,7 +129,7 @@ permissions:
   contents: read
 jobs:
   check-changelog-fragments:
-    uses: SETA1609/devops_tools/.github/workflows/changelog-fragments.yml@<sha> # v0.2.0
+    uses: SETA1609/devops_tools/.github/workflows/changelog-fragments.yml@<sha> # v0.3.0
     with:
       devops-tools-version: <sha>
 ```
@@ -148,7 +148,7 @@ permissions:
   contents: read
 jobs:
   check-submodule-pins:
-    uses: SETA1609/devops_tools/.github/workflows/submodule-pins.yml@<sha> # v0.2.0
+    uses: SETA1609/devops_tools/.github/workflows/submodule-pins.yml@<sha> # v0.3.0
     with:
       devops-tools-version: <sha>
 ```
@@ -243,7 +243,7 @@ A project enables it in `.claude/settings.json`, pinning a release tag (a market
 {
   "extraKnownMarketplaces": {
     "devops-tools": {
-      "source": { "source": "github", "repo": "SETA1609/devops_tools", "ref": "v0.2.0" }
+      "source": { "source": "github", "repo": "SETA1609/devops_tools", "ref": "v0.3.0" }
     }
   },
   "enabledPlugins": { "devops-tools@devops-tools": true }

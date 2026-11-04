@@ -4,6 +4,10 @@ Newest first. Each entry names its issue from `issues.md`.
 
 ## Unreleased
 
+## v0.3.0 (2026-11-04)
+
+The rebase can regenerate the roadmap story table instead of merging it line by line.
+
 ### Issue 10: Regenerate the roadmap table when rebasing
 
 - `rebase-open-branches`: with the new setting `regenerate-roadmap-on-rebase = true`, the roadmap file goes through a merge driver that takes the main branch's generated story table and merges the rest of the file as usual; after each rebased branch the table is regenerated from the story files and committed when it changed. A conflict outside the table still stops the branch. Off by default.

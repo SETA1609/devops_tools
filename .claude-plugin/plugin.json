@@ -1,6 +1,6 @@
 {
   "name": "devops-tools",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Where the work stands, what to do next, and upstream docs fetched into a local cache",
   "author": {
     "name": "Sebastian Tamayo"
