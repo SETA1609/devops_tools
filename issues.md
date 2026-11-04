@@ -60,7 +60,7 @@ One issue is one pull request, on a branch named `issue-<n>-<slug>`. Numbers are
 
 ## Issue 10: Regenerate the roadmap table when rebasing
 
-- Status: review
+- Status: done
 - Do: The story table between the roadmap markers is generated, and every pull request that changes an issue's status regenerates it, so two open pull requests edit the same rows. Rebasing one onto the other either stops on a conflict a person has to resolve by hand, or merges cleanly and leaves a stale table (a wrong open-issue count). Add the opt-in setting `regenerate-roadmap-on-rebase`. With it, `rebase-open-branches` routes the roadmap file to a merge driver that ignores the generated block (it takes the target's block and merges the rest of the file as usual, so a conflict outside the block still stops), and after each successful rebase it regenerates the table from the rebased story files and commits the result when it changed.
 - Done when: tests cover a conflict inside the block (resolved, table correct), a clean merge that left the table stale (a regeneration commit), a conflict outside the block (left for a person), the setting off (old behaviour), and the setting's parsing.
 - Review 2026-11-04: `uv run pytest` passes (337, of which 11 are new in `tests/test_rebase_regenerates_roadmap.py`); `ruff check` and `ruff format --check` pass. The stale-table case is the common one: two branches that each mark a different issue of the same story finished produce the identical row change, which git merges cleanly into a wrong count. The regeneration commit is made with whatever identity the rebase runs under (the Actions bot in CI). Not run in a real workflow yet.
