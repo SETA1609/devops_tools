@@ -268,6 +268,47 @@ def replace_story_table(roadmap_text: str, story_table: str) -> str:
     return roadmap_text[:begin_position] + "\n\n" + story_table + "\n" + roadmap_text[end_position:]
 
 
+def split_story_table(roadmap_text: str) -> tuple[str, str, str] | None:
+    """
+    The roadmap text as (before the table, the table, from the end marker on), or None when a
+    marker is missing. Joining the three gives the text back.
+    """
+    if ROADMAP_TABLE_BEGIN not in roadmap_text or ROADMAP_TABLE_END not in roadmap_text:
+        return None
+    begin_marker_position = roadmap_text.index(ROADMAP_TABLE_BEGIN)
+    begin_position = roadmap_text.index("-->", begin_marker_position) + len("-->")
+    end_position = roadmap_text.index(ROADMAP_TABLE_END)
+    if end_position < begin_position:
+        return None
+    return (
+        roadmap_text[:begin_position],
+        roadmap_text[begin_position:end_position],
+        roadmap_text[end_position:],
+    )
+
+
+def regenerate_roadmap_story_table(repository: Path, settings: RepositorySettings) -> bool:
+    """
+    Rewrite the story table in the roadmap file from the story files, as `write` does. Return
+    True when the file changed. Raises ValueError or OSError when the roadmap cannot be written.
+    """
+    issues_by_id, story_ids_in_order = read_roadmap_issues(
+        repository / settings.stories_directory, settings.issue_id_pattern
+    )
+    focus_path = repository / settings.focus_file
+    focus_story_ids = (
+        read_focus_story_ids(focus_path.read_text(encoding="utf-8")) if focus_path.is_file() else []
+    )
+    story_table = build_story_table(issues_by_id, story_ids_in_order, focus_story_ids)
+    roadmap_path = repository / settings.roadmap_file
+    roadmap_text = roadmap_path.read_text(encoding="utf-8")
+    updated_text = replace_story_table(roadmap_text, story_table)
+    if updated_text == roadmap_text:
+        return False
+    roadmap_path.write_text(updated_text, encoding="utf-8")
+    return True
+
+
 def parse_arguments(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="devops-tools roadmap-order",

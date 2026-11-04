@@ -4,6 +4,12 @@ Newest first. Each entry names its issue from `issues.md`.
 
 ## Unreleased
 
+### Issue 10: Regenerate the roadmap table when rebasing
+
+- `rebase-open-branches`: with the new setting `regenerate-roadmap-on-rebase = true`, the roadmap file goes through a merge driver that takes the main branch's generated story table and merges the rest of the file as usual; after each rebased branch the table is regenerated from the story files and committed when it changed. A conflict outside the table still stops the branch. Off by default.
+- `roadmap_order`: `split_story_table` and `regenerate_roadmap_story_table`, used by the rebase.
+- Settings: a boolean value (`true`/`false`) is accepted for boolean settings.
+
 ## v0.2.0 (2026-11-01)
 
 The toolchain container runner with a shared base image, the agent container with a start script that installs declared plugins, and the skills (status report, roadmap order, fetch docs) as a Claude Code plugin.

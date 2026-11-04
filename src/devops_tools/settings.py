@@ -45,9 +45,16 @@ def build_repository_settings(table: dict[str, object], source_name: str) -> Rep
             f"known: {', '.join(sorted(field_names_by_key))}"
         )
     default_settings = RepositorySettings()
-    values: dict[str, str | tuple[str, ...]] = {}
+    values: dict[str, str | bool | tuple[str, ...]] = {}
     for key, value in table.items():
         field_name = field_names_by_key[key]
+        if isinstance(getattr(default_settings, field_name), bool):
+            if not isinstance(value, bool):
+                raise RepositorySettingsError(
+                    f"{source_name}: [tool.devops-tools] {key} must be true or false"
+                )
+            values[field_name] = value
+            continue
         if isinstance(getattr(default_settings, field_name), tuple):
             values[field_name] = convert_pattern_list(key, value, source_name)
             continue
