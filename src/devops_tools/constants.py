@@ -50,6 +50,10 @@ GIT_TIMEOUT_SECONDS = 300
 
 # Rebase open branches
 CHANGELOG_MERGE_DRIVER = "changelog-entries"
+# Merges the roadmap file with its generated story table taken from the target; the rebase then
+# regenerates the table (setting `regenerate-roadmap-on-rebase`).
+ROADMAP_MERGE_DRIVER = "roadmap-generated-table"
+ROADMAP_REGENERATION_COMMIT_MESSAGE = "Regenerate the roadmap order table"
 ATTRIBUTES_BEGIN = "# rebase-open-branches changelog-entries begin"
 ATTRIBUTES_END = "# rebase-open-branches changelog-entries end"
 GITHUB_API_TIMEOUT_SECONDS = 30

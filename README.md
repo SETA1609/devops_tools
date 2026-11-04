@@ -71,7 +71,7 @@ These print plain output for CI; wrap one in `devops-tools run <name> -- ...` to
 
 | Subcommand | What it does |
 |---|---|
-| `rebase-open-branches` | Rebases each open pull request from this repository onto the main branch and pushes with `--force-with-lease`. A changelog conflict where both sides only added lines keeps both, the branch's entries first, with the newer `Last updated:` timestamp. Files matching `keep-both-added-lines` get the same merge. Any other conflict leaves that branch for a person. A branch whose every change is already in the main branch (squash merged, then pushed again) is skipped, and a local branch checked out in another worktree is never moved. Needs `GITHUB_REPOSITORY` and `GITHUB_TOKEN`, or `--branches NAME...` to run locally. |
+| `rebase-open-branches` | Rebases each open pull request from this repository onto the main branch and pushes with `--force-with-lease`. A changelog conflict where both sides only added lines keeps both, the branch's entries first, with the newer `Last updated:` timestamp. Files matching `keep-both-added-lines` get the same merge. With `regenerate-roadmap-on-rebase`, the generated story table in `roadmap-file` is never merged line by line: the rebase takes the main branch's table, merges the rest of the file as usual, then regenerates the table from the rebased story files and commits it when it changed (`Regenerate the roadmap order table`), so two pull requests that change issue statuses neither conflict nor leave a stale count. Any other conflict leaves that branch for a person. A branch whose every change is already in the main branch (squash merged, then pushed again) is skipped, and a local branch checked out in another worktree is never moved. Needs `GITHUB_REPOSITORY` and `GITHUB_TOKEN`, or `--branches NAME...` to run locally. |
 | `changelog-fragments check [--branch B]` | Each pull request adds `changes/<issue-id>.md` instead of editing the changelog. Checks every fragment, and with `--branch` that the branch's issue has one. |
 | `changelog-fragments preview` | Prints the unreleased entries, newest first. |
 | `changelog-fragments release --section-title T` | Moves the fragments into the changelog under `## T`, with `(#N)` from squash merge subjects, and deletes them. |
@@ -90,6 +90,7 @@ issue-id-pattern = '[A-Za-z][A-Za-z0-9]*(?:\.[0-9]+)?-[0-9]+'  # one issue ID, n
 changes-directory = "changes"                              # fragments
 changelog-file = "CHANGELOG.md"                            # fragments and the rebase merge driver
 keep-both-added-lines = ["docs/stories/*.md"]             # more files the rebase merges like the changelog
+regenerate-roadmap-on-rebase = true                        # rebuild the roadmap story table when rebasing
 ```
 
 Branch names are `<issue-id>-<slug>` or `agent/<agent-name>/<issue-id>-<slug>`, matched ignoring case.

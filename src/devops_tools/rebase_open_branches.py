@@ -5,6 +5,10 @@ Runs from GitHub Actions on every push to the main branch. A conflict in the cha
 both: the rebased branch's entries come first, then the target's, and the `Last updated:` line
 takes the newer timestamp. Any other conflict, in the changelog or anywhere else, aborts that
 branch and leaves its remote tip alone for a person to resolve.
+With `regenerate-roadmap-on-rebase` in the settings, the generated story table in the roadmap
+file is not merged: the rebase takes the target's table, merges the rest of the file as usual,
+and after each rebased branch regenerates the table from the story files and commits it when
+it changed.
 Run locally with --branches, it refuses a dirty working tree and never moves a local branch
 that has commits its remote does not.
 Branches with no open pull request are left alone, so a squash-merged branch that GitHub has
@@ -34,9 +38,13 @@ from devops_tools.constants import (
     DEFAULT_CHANGELOG_FILE,
     GITHUB_API_TIMEOUT_SECONDS,
     LAST_UPDATED_TIMESTAMP_LINE,
+    ROADMAP_MERGE_DRIVER,
+    ROADMAP_REGENERATION_COMMIT_MESSAGE,
     SAFE_BRANCH_NAME,
 )
 from devops_tools.exceptions import RepositorySettingsError
+from devops_tools.models import RepositorySettings
+from devops_tools.roadmap_order import regenerate_roadmap_story_table, split_story_table
 from devops_tools.settings import read_repository_settings
 
 
@@ -207,19 +215,103 @@ def write_merged_changelog(base_path: str, target_path: str, branch_path: str) -
     return 0
 
 
-def build_attributes_block(merged_file_patterns: Sequence[str]) -> str:
+def merge_roadmap_sides(base_text: str, target_text: str, branch_text: str) -> str | None:
+    """
+    Merge three versions of the roadmap file, ignoring the generated story table: every side's
+    table is replaced by the target's before the merge, so the table never conflicts, and the
+    rest of the file merges as usual. Returns None when a side has no table markers or the rest
+    of the file conflicts. The rebase regenerates the table afterwards.
+    """
+    target_parts = split_story_table(target_text)
+    if target_parts is None:
+        return None
+    target_table = target_parts[1]
+    normalized_texts = []
+    for text in (base_text, target_text, branch_text):
+        parts = split_story_table(text)
+        if parts is None:
+            return None
+        normalized_texts.append(parts[0] + target_table + parts[2])
+    normalized_base, normalized_target, normalized_branch = normalized_texts
+    with tempfile.TemporaryDirectory() as directory:
+        paths = []
+        for name, text in (
+            ("target", normalized_target),
+            ("base", normalized_base),
+            ("branch", normalized_branch),
+        ):
+            path = os.path.join(directory, name)
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.write(text)
+            paths.append(path)
+        completed = subprocess.run(
+            ["git", "merge-file", "-p", *paths],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    # merge-file exits with the number of conflicts, or a negative (>127) code on error.
+    if completed.returncode != 0:
+        return None
+    return completed.stdout
+
+
+def write_merged_roadmap(base_path: str, target_path: str, branch_path: str) -> int:
+    """
+    Merge driver for the roadmap file, called by git as `%O %A %B`. Writes the merge into
+    target_path and exits 0, or exits 1 and leaves the conflict.
+    """
+    try:
+        texts = []
+        for path in (base_path, target_path, branch_path):
+            with open(path, encoding="utf-8") as handle:
+                texts.append(handle.read())
+    except (OSError, UnicodeDecodeError):
+        return 1
+    merged = merge_roadmap_sides(*texts)
+    if merged is None:
+        return 1
+    with open(target_path, "w", encoding="utf-8") as handle:
+        handle.write(merged)
+    return 0
+
+
+def build_attributes_block(
+    merged_file_patterns: Sequence[str], roadmap_file: str | None = None
+) -> str:
     routed_lines = "".join(
         f"{pattern} merge={CHANGELOG_MERGE_DRIVER}\n" for pattern in merged_file_patterns
     )
+    # Last, so it wins over a changelog pattern that also matches the roadmap file.
+    if roadmap_file is not None:
+        routed_lines += f"/{roadmap_file} merge={ROADMAP_MERGE_DRIVER}\n"
     return f"{ATTRIBUTES_BEGIN}\n{routed_lines}{ATTRIBUTES_END}\n"
 
 
-def install_changelog_merge_driver(repository: str, merged_file_patterns: Sequence[str]) -> None:
+def install_changelog_merge_driver(
+    repository: str, merged_file_patterns: Sequence[str], roadmap_file: str | None = None
+) -> None:
     """
     Register the merge driver and route the changelog and the other `merged_file_patterns`
-    (gitattributes patterns) to it in `.git/info/attributes`.
-    Git runs the driver as this module under the same Python, so it works from a uvx install.
+    (gitattributes patterns) to it in `.git/info/attributes`. With `roadmap_file`, also register
+    the roadmap driver and route that file to it.
+    Git runs the drivers as this module under the same Python, so they work from a uvx install.
     """
+    if roadmap_file is not None:
+        roadmap_driver = (
+            f"{shlex.quote(sys.executable)} -I -m devops_tools.rebase_open_branches"
+            " merge-roadmap %O %A %B"
+        )
+        run_git(
+            repository,
+            "config",
+            f"merge.{ROADMAP_MERGE_DRIVER}.name",
+            "Take the target's generated roadmap table; it is regenerated after the rebase",
+            check=True,
+        )
+        run_git(
+            repository, "config", f"merge.{ROADMAP_MERGE_DRIVER}.driver", roadmap_driver, check=True
+        )
     driver = (
         f"{shlex.quote(sys.executable)} -I -m devops_tools.rebase_open_branches"
         " merge-changelog %O %A %B"
@@ -248,12 +340,13 @@ def install_changelog_merge_driver(repository: str, merged_file_patterns: Sequen
         with open(attributes_path, "a", encoding="utf-8") as handle:
             if existing and not existing.endswith("\n"):
                 handle.write("\n")
-            handle.write(build_attributes_block(merged_file_patterns))
+            handle.write(build_attributes_block(merged_file_patterns, roadmap_file))
 
 
 def remove_changelog_merge_driver(repository: str) -> None:
-    run_git(repository, "config", "--unset", f"merge.{CHANGELOG_MERGE_DRIVER}.name")
-    run_git(repository, "config", "--unset", f"merge.{CHANGELOG_MERGE_DRIVER}.driver")
+    for driver_name in (CHANGELOG_MERGE_DRIVER, ROADMAP_MERGE_DRIVER):
+        run_git(repository, "config", "--unset", f"merge.{driver_name}.name")
+        run_git(repository, "config", "--unset", f"merge.{driver_name}.driver")
     attributes_path = git_path(repository, "info/attributes")
     if not os.path.exists(attributes_path):
         return
@@ -345,7 +438,34 @@ def head_has_conflict_markers(repository: str) -> bool:
     return completed.returncode == 0
 
 
-def rebase_one_branch(repository: str, branch: str, target: str, push: bool) -> bool:
+def commit_regenerated_roadmap(repository: str, settings: RepositorySettings) -> bool:
+    """
+    Regenerate the roadmap story table at HEAD and commit it when it changed. Return False when
+    it could not be regenerated or committed.
+    """
+    try:
+        changed = regenerate_roadmap_story_table(Path(repository), settings)
+    except (ValueError, OSError) as roadmap_error:
+        print(f"  could not regenerate {settings.roadmap_file}: {roadmap_error}")
+        return False
+    if not changed:
+        return True
+    run_git(repository, "add", "--", settings.roadmap_file, check=True)
+    committed = run_git(repository, "commit", "-m", ROADMAP_REGENERATION_COMMIT_MESSAGE)
+    if committed.returncode != 0:
+        print(committed.stderr.strip() or committed.stdout.strip())
+        return False
+    print(f"  regenerated {settings.roadmap_file}")
+    return True
+
+
+def rebase_one_branch(
+    repository: str,
+    branch: str,
+    target: str,
+    push: bool,
+    roadmap_settings: RepositorySettings | None = None,
+) -> bool:
     """Replay branch onto origin/target. Return False when it was left unpushed."""
     print(f"==> Rebase {branch} onto {target}")
     remote_reference = f"refs/remotes/origin/{branch}"
@@ -368,6 +488,11 @@ def rebase_one_branch(repository: str, branch: str, target: str, push: bool) -> 
         return False
     if head_has_conflict_markers(repository):
         print(f"  {branch} still has conflict markers — left unchanged")
+        return False
+    if roadmap_settings is not None and not commit_regenerated_roadmap(
+        repository, roadmap_settings
+    ):
+        print(f"  {branch} was rebased but its roadmap table was not regenerated — left unchanged")
         return False
     if push and not push_rebased_branch(repository, branch):
         return False
@@ -474,7 +599,12 @@ def rebase_branches(
     fetch: bool,
     changelog_file: str = DEFAULT_CHANGELOG_FILE,
     keep_both_added_lines: Sequence[str] = (),
+    roadmap_settings: RepositorySettings | None = None,
 ) -> int:
+    """
+    Rebase each branch onto origin/target. With `roadmap_settings`, the roadmap's generated
+    story table is taken from the target during the rebase and regenerated afterwards.
+    """
     if not working_tree_is_clean(repository):
         print("The working tree has uncommitted changes to tracked files; commit or stash them.")
         return 1
@@ -484,7 +614,11 @@ def rebase_branches(
             print(fetched.stderr.strip() or fetched.stdout.strip())
             return 1
     start = current_branch_name(repository)
-    install_changelog_merge_driver(repository, [changelog_file, *keep_both_added_lines])
+    install_changelog_merge_driver(
+        repository,
+        [changelog_file, *keep_both_added_lines],
+        roadmap_settings.roadmap_file if roadmap_settings is not None else None,
+    )
     failures = 0
     try:
         configure_actions_identity(repository)
@@ -492,7 +626,7 @@ def rebase_branches(
             print(f"No open pull requests against {target}.")
             return 0
         for branch in branches:
-            if not rebase_one_branch(repository, branch, target, push):
+            if not rebase_one_branch(repository, branch, target, push, roadmap_settings):
                 failures += 1
     finally:
         remove_changelog_merge_driver(repository)
@@ -540,6 +674,14 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 2
         return write_merged_changelog(arguments[1], arguments[2], arguments[3])
+    if arguments and arguments[0] == "merge-roadmap":
+        if len(arguments) != 4:
+            print(
+                "usage: rebase-open-branches merge-roadmap BASE TARGET BRANCH",
+                file=sys.stderr,
+            )
+            return 2
+        return write_merged_roadmap(arguments[1], arguments[2], arguments[3])
 
     args = parse_args(arguments)
     repository = os.path.abspath(args.repository)
@@ -581,6 +723,7 @@ def main(argv: list[str] | None = None) -> int:
         fetch=not args.no_fetch,
         changelog_file=settings.changelog_file,
         keep_both_added_lines=settings.keep_both_added_lines,
+        roadmap_settings=settings if settings.regenerate_roadmap_on_rebase else None,
     )
 
 
