@@ -167,3 +167,17 @@ def test_a_project_without_issue_files_is_a_usage_error(repository):
     """
     (repository / "pyproject.toml").write_text("[tool.devops-tools]\n", encoding="utf-8")
     assert run_close(repository, "ab-01-slug") == CLOSE.EXIT_CODE_USAGE_ERROR
+
+
+def test_issues_directory_is_read_and_defaults_to_unset():
+    """
+    What: build_repository_settings.
+    When: the table sets issues-directory, and when it does not.
+    Then: the value is kept, and the default is an empty string meaning no per-issue files.
+    """
+    from devops_tools.settings import build_repository_settings
+
+    assert build_repository_settings({"issues-directory": "docs/issues"}, "t").issues_directory == (
+        "docs/issues"
+    )
+    assert build_repository_settings({}, "t").issues_directory == ""

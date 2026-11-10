@@ -1,8 +1,8 @@
 # Reusable: after a pull request merges, move its issue file from open to done, regenerate the
 # roadmap story table, and commit that to the base branch. The caller runs it on
 # `pull_request: types: [closed]` with contents: write. There is no concurrency group, because
-# GitHub cancels waiting runs of a group and an issue would stay open: each attempt starts again
-# from the latest base branch instead, so two runs that race only retry.
+# GitHub cancels waiting runs of a group and an issue would stay open: the script retries from
+# the latest base branch instead, so two runs that race only retry.
 name: Close merged issue
 
 on:
@@ -27,14 +27,18 @@ jobs:
     if: github.event.pull_request.merged == true && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     steps:
+      - name: Check out the devops-tools scripts
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: SETA1609/devops_tools
+          ref: ${{ inputs.devops-tools-version }}
+          path: devops-tools-checkout
+          persist-credentials: false
+
       - name: Check the devops-tools version
         env:
           DEVOPS_TOOLS_VERSION: ${{ inputs.devops-tools-version }}
-        run: |
-          if ! [[ "$DEVOPS_TOOLS_VERSION" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "devops-tools-version must be a full 40-character commit SHA, got: $DEVOPS_TOOLS_VERSION" >&2
-            exit 1
-          fi
+        run: bash "$GITHUB_WORKSPACE/devops-tools-checkout/scripts/workflows/check_devops_tools_version.sh"
 
       - name: Install uv
         uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
@@ -42,13 +46,15 @@ jobs:
           version: "0.10.12"
           python-version: "3.13"
 
-      - name: Check out
+      - name: Check out the calling repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
+          path: calling-repository
           ref: ${{ github.event.pull_request.base.ref }}
           fetch-depth: 0
 
       - name: Close the issue and commit
+        working-directory: calling-repository
         env:
           DEVOPS_TOOLS_VERSION: ${{ inputs.devops-tools-version }}
           SETTINGS_FILE: ${{ inputs.settings-file }}
@@ -56,30 +62,4 @@ jobs:
           HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
           PULL_REQUEST_NUMBER: ${{ github.event.pull_request.number }}
           MERGED_AT: ${{ github.event.pull_request.merged_at }}
-        run: |
-          settings_arguments=()
-          if [ -n "$SETTINGS_FILE" ]; then settings_arguments=(--settings-file "$SETTINGS_FILE"); fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          for attempt in 1 2 3 4 5; do
-            git fetch origin "$BASE_BRANCH"
-            git reset --hard FETCH_HEAD
-            uvx --from "git+https://github.com/SETA1609/devops_tools@$DEVOPS_TOOLS_VERSION" \
-              devops-tools close-merged-issue "${settings_arguments[@]}" \
-              --branch "$HEAD_BRANCH" \
-              --pull-request-number "$PULL_REQUEST_NUMBER" \
-              --merge-date "${MERGED_AT%%T*}"
-            git add --all
-            if git diff --cached --quiet; then
-              echo "nothing to commit"
-              exit 0
-            fi
-            git commit -m "Close the issue of pull request #$PULL_REQUEST_NUMBER"
-            if git push origin "HEAD:$BASE_BRANCH"; then
-              exit 0
-            fi
-            echo "the push lost a race on attempt $attempt; starting again"
-            sleep $((attempt * 5))
-          done
-          echo "could not push after 5 attempts" >&2
-          exit 1
+        run: bash "$GITHUB_WORKSPACE/devops-tools-checkout/scripts/workflows/close_merged_issue.sh"

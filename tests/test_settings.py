@@ -78,17 +78,3 @@ def test_read_repository_settings_rejects_bad_pattern_lists(tmp_path, value_text
     write_pyproject(tmp_path, f"[tool.devops-tools]\nkeep-both-added-lines = {value_text}\n")
     with pytest.raises(RepositorySettingsError, match="keep-both-added-lines"):
         read_repository_settings(tmp_path)
-
-
-def test_issues_directory_is_read_and_defaults_to_unset():
-    """
-    What: build_repository_settings.
-    When: the table sets issues-directory, and when it does not.
-    Then: the value is kept, and the default is an empty string meaning no per-issue files.
-    """
-    from devops_tools.settings import build_repository_settings
-
-    assert build_repository_settings({"issues-directory": "docs/issues"}, "t").issues_directory == (
-        "docs/issues"
-    )
-    assert build_repository_settings({}, "t").issues_directory == ""

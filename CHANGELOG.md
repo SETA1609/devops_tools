@@ -9,6 +9,7 @@ Newest first. Each entry names its issue from `issues.md`.
 - Settings: `issues-directory` makes `roadmap-order` and `status-report` read one Markdown file per issue from its `open` and `done` subdirectories.
 - `close-merged-issue`: moves the issue named by a merged branch to `done` with its `Merged:` line when its status is `review`, and regenerates the roadmap story table. An issue in another status stays open.
 - Workflow: reusable `close-merged-issue.yml` runs it after a merge and commits to the base branch, retrying from the latest base branch when a push loses a race.
+- Workflows: every `run:` step now calls a committed script in `scripts/workflows/`. Reusable workflows check this repository out at the pinned commit beside the calling repository, which is checked out under `calling-repository/`. `tests/test_workflows.py` fails on inline scripting.
 
 ## v0.3.0 (2026-11-04)
 

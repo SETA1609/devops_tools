@@ -22,8 +22,8 @@ jobs:
           version: "0.10.12"
           python-version: "3.13"
       - name: Test
-        run: uv run pytest
+        run: bash scripts/workflows/run_package_check.sh tests
       - name: Lint
-        run: uv run ruff check
+        run: bash scripts/workflows/run_package_check.sh lint
       - name: Check formatting
-        run: uv run ruff format --check
+        run: bash scripts/workflows/run_package_check.sh format
