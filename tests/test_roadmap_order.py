@@ -203,3 +203,46 @@ def test_read_roadmap_issues_follows_the_issue_id_pattern_setting(tmp_path):
     )
     issues_by_id, _ = ORDER.read_roadmap_issues(tmp_path, r"AB-[0-9]{2}")
     assert sorted(issues_by_id) == ["AB-01"]
+
+
+def write_issue_file(issues_directory: Path, state: str, issue_id: str, text: str) -> None:
+    directory = issues_directory / state
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / f"{issue_id}.md").write_text(text, encoding="utf-8")
+
+
+def test_per_issue_files_are_read_with_their_status_and_needs(tmp_path):
+    """
+    What: read_roadmap_issues with an issues directory.
+    When: one issue is in the open directory and the one it needs is in the done directory.
+    Then: both are read, the story order still comes from the story file headings, and the open
+    issue is not blocked by the done one.
+    """
+    stories_directory = tmp_path / "stories"
+    write_story_file(stories_directory, "01-first.md", "## AB First story\n")
+    issues_directory = tmp_path / "issues"
+    write_issue_file(issues_directory, "open", "AB-02", write_issue("AB-02", "todo", "AB-01"))
+    write_issue_file(issues_directory, "done", "AB-01", write_issue("AB-01", "done", "—"))
+    issues_by_id, story_ids = ORDER.read_roadmap_issues(
+        stories_directory, issues_directory=issues_directory
+    )
+    assert sorted(issues_by_id) == ["AB-01", "AB-02"]
+    assert story_ids == ["AB"]
+    assert issues_by_id["AB-02"].needed_issue_ids == ("AB-01",)
+    assert ORDER.list_unfinished_needs(issues_by_id["AB-02"], issues_by_id) == []
+
+
+def test_missing_issue_directories_read_as_empty(tmp_path):
+    """
+    What: read_roadmap_issues with an issues directory.
+    When: neither the open nor the done subdirectory exists yet.
+    Then: only the story files are read and nothing fails.
+    """
+    stories_directory = tmp_path / "stories"
+    write_story_file(
+        stories_directory, "01-first.md", "## AB First\n\n" + write_issue("AB-01", "todo", "—")
+    )
+    issues_by_id, _ = ORDER.read_roadmap_issues(
+        stories_directory, issues_directory=tmp_path / "issues"
+    )
+    assert list(issues_by_id) == ["AB-01"]

@@ -27,6 +27,7 @@ from devops_tools.constants import (
     GIT_TIMEOUT_SECONDS,
     ISSUE_HEADING_LINE,
     ISSUE_STATUS_LINE,
+    OPEN_ISSUES_DIRECTORY_NAME,
     STATUS_ON_BRANCH,
     STORY_FILES_SKIPPED,
 )
@@ -39,6 +40,11 @@ from devops_tools.models import (
     StatusReport,
     StoryIssueStatus,
     SubmoduleStatus,
+)
+from devops_tools.roadmap_order import (
+    find_issues_directory,
+    find_story_id_of_issue,
+    read_roadmap_issues,
 )
 from devops_tools.settings import read_repository_settings
 
@@ -282,36 +288,77 @@ def find_merged_pull_request_number(issue_id: str, main_commit_subjects: list[st
     return None
 
 
+def read_issue_headings_and_statuses(issue_path: Path) -> list[tuple[str, str, str]]:
+    """
+    (issue ID, title, status) of each issue in a story file or per-issue file, in file order.
+    """
+    issues: list[tuple[str, str, str]] = []
+    heading: tuple[str, str] | None = None
+    for line in issue_path.read_text(encoding="utf-8").splitlines():
+        heading_match = ISSUE_HEADING_LINE.match(line)
+        if heading_match:
+            heading = (heading_match.group("issue_id"), heading_match.group("title"))
+            continue
+        status_match = ISSUE_STATUS_LINE.match(line)
+        if status_match and heading is not None:
+            issues.append((*heading, status_match.group("status")))
+            heading = None
+    return issues
+
+
+def group_open_issue_files_by_story(
+    stories_directory: Path, issues_directory: Path
+) -> list[list[tuple[str, str, str, str]]]:
+    """
+    The open per-issue files as (issue ID, title, status, file label), grouped by story: stories
+    in story file order, then any others by ID; issues by number within a story.
+    """
+    _, story_ids_in_order = read_roadmap_issues(stories_directory)
+    issues_by_story: dict[str, list[tuple[str, str, str, str]]] = {}
+    for issue_file in (issues_directory / OPEN_ISSUES_DIRECTORY_NAME).glob("*.md"):
+        label = f"{OPEN_ISSUES_DIRECTORY_NAME}/{issue_file.name}"
+        for issue in read_issue_headings_and_statuses(issue_file):
+            issues_by_story.setdefault(find_story_id_of_issue(issue[0]), []).append((*issue, label))
+
+    def order_story(story_id: str) -> tuple[int, str]:
+        if story_id in story_ids_in_order:
+            return (story_ids_in_order.index(story_id), "")
+        return (len(story_ids_in_order), story_id)
+
+    return [
+        sorted(issues_by_story[story_id], key=lambda issue: int(issue[0].rsplit("-", 1)[1]))
+        for story_id in sorted(issues_by_story, key=order_story)
+    ]
+
+
 def list_story_issue_statuses(
-    stories_directory: Path, main_commit_subjects: list[str]
+    stories_directory: Path,
+    main_commit_subjects: list[str],
+    issues_directory: Path | None = None,
 ) -> list[StoryIssueStatus]:
     """
-    Issues in doing or review, then the first todo issue of each story file, in file order.
+    Issues in doing or review, then the first todo issue of each story file (and, with
+    `issues_directory`, of each story among the open per-issue files), in order.
     """
     active_issues: list[StoryIssueStatus] = []
     next_todo_issues: list[StoryIssueStatus] = []
     story_paths = sorted(
         path for path in stories_directory.glob("*.md") if path.name not in STORY_FILES_SKIPPED
     )
-    for story_path in story_paths:
-        issues: list[tuple[str, str, str]] = []
-        heading: tuple[str, str] | None = None
-        for line in story_path.read_text(encoding="utf-8").splitlines():
-            heading_match = ISSUE_HEADING_LINE.match(line)
-            if heading_match:
-                heading = (heading_match.group("issue_id"), heading_match.group("title"))
-                continue
-            status_match = ISSUE_STATUS_LINE.match(line)
-            if status_match and heading is not None:
-                issues.append((*heading, status_match.group("status")))
-                heading = None
+    issue_groups = [
+        [(*issue, story_path.name) for issue in read_issue_headings_and_statuses(story_path)]
+        for story_path in story_paths
+    ]
+    if issues_directory is not None:
+        issue_groups += group_open_issue_files_by_story(stories_directory, issues_directory)
+    for issue_group in issue_groups:
         has_next_todo = False
-        for issue_id, title, status in issues:
+        for issue_id, title, status, file_label in issue_group:
             issue = StoryIssueStatus(
                 issue_id=issue_id,
                 title=title,
                 status=status,
-                story_file=story_path.name,
+                story_file=file_label,
                 merged_pull_request_number=find_merged_pull_request_number(
                     issue_id, main_commit_subjects
                 ),
@@ -387,9 +434,14 @@ def build_suggested_actions(report: StatusReport) -> list[str]:
     actions.extend(report.submodule_pin_problems)
     for issue in report.story_issues:
         if issue.merged_pull_request_number and issue.status in ACTIVE_ISSUE_STATUSES:
+            close_step = (
+                "run devops-tools close-merged-issue."
+                if issue.story_file.startswith(f"{OPEN_ISSUES_DIRECTORY_NAME}/")
+                else "move it to done.md."
+            )
             actions.append(
                 f"{issue.issue_id} was merged in #{issue.merged_pull_request_number} but is still "
-                f"'{issue.status}' in {issue.story_file}; move it to done.md."
+                f"'{issue.status}' in {issue.story_file}; {close_step}"
             )
     return actions
 
@@ -431,7 +483,9 @@ def build_status_report(
         submodules=submodules,
         submodule_pin_problems=submodule_pin_problems,
         story_issues=list_story_issue_statuses(
-            repository / settings.stories_directory, main_commit_subjects
+            repository / settings.stories_directory,
+            main_commit_subjects,
+            find_issues_directory(repository, settings),
         ),
         suggested_actions=[],
     )

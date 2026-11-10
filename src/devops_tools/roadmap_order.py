@@ -18,12 +18,14 @@ from collections import defaultdict
 from pathlib import Path
 
 from devops_tools.constants import (
+    DONE_ISSUES_DIRECTORY_NAME,
     DONE_STORY_FILE_NAME,
     EXIT_CODE_USAGE_ERROR,
     FINISHED_ISSUE_STATUSES,
     FOCUS_LINE,
     ISSUE_NEEDS_LINE,
     ISSUE_STATUS_LINE,
+    OPEN_ISSUES_DIRECTORY_NAME,
     ROADMAP_TABLE_BEGIN,
     ROADMAP_TABLE_END,
     STORY_HEADING,
@@ -40,11 +42,44 @@ def find_story_id_of_issue(issue_id: str) -> str:
     return issue_id.rsplit("-", 1)[0]
 
 
+def read_issues_from_text(
+    issue_text: str,
+    issue_block_pattern: re.Pattern[str],
+    issue_id_pattern: str,
+    issues_by_id: dict[str, RoadmapIssue],
+) -> None:
+    """
+    Add every `#### <issue-id> <title>` entry of `issue_text` to `issues_by_id`.
+    """
+    for issue_match in issue_block_pattern.finditer(issue_text):
+        body = issue_match.group("body")
+        status_match = ISSUE_STATUS_LINE.search(body)
+        needs_match = ISSUE_NEEDS_LINE.search(body)
+        issue_id = issue_match.group("issue_id")
+        needed_issue_ids = (
+            tuple(re.findall(issue_id_pattern, needs_match.group("needs"))) if needs_match else ()
+        )
+        issues_by_id[issue_id] = RoadmapIssue(
+            issue_id=issue_id,
+            title=issue_match.group("title").strip(),
+            story_id=find_story_id_of_issue(issue_id),
+            status=status_match.group("status") if status_match else "todo",
+            needed_issue_ids=needed_issue_ids,
+        )
+
+
+def find_issues_directory(repository: Path, settings: RepositorySettings) -> Path | None:
+    return repository / settings.issues_directory if settings.issues_directory else None
+
+
 def read_roadmap_issues(
-    stories_directory: Path, issue_id_pattern: str = DEFAULT_REPOSITORY_SETTINGS.issue_id_pattern
+    stories_directory: Path,
+    issue_id_pattern: str = DEFAULT_REPOSITORY_SETTINGS.issue_id_pattern,
+    issues_directory: Path | None = None,
 ) -> tuple[dict[str, RoadmapIssue], list[str]]:
     """
-    Every issue in the story files and done.md, and the story IDs in file and heading order.
+    Every issue in the story files, done.md, and the per-issue files of `issues_directory`, and
+    the story IDs in file and heading order.
     """
     issue_block_pattern = re.compile(
         rf"^#### (?P<issue_id>{issue_id_pattern}) (?P<title>.*)\n(?P<body>(?:[- ].*\n)*)",
@@ -60,23 +95,14 @@ def read_roadmap_issues(
             for story_match in STORY_HEADING.finditer(story_text):
                 if story_match.group("story_id") not in story_ids_in_order:
                     story_ids_in_order.append(story_match.group("story_id"))
-        for issue_match in issue_block_pattern.finditer(story_text):
-            body = issue_match.group("body")
-            status_match = ISSUE_STATUS_LINE.search(body)
-            needs_match = ISSUE_NEEDS_LINE.search(body)
-            issue_id = issue_match.group("issue_id")
-            needed_issue_ids = (
-                tuple(re.findall(issue_id_pattern, needs_match.group("needs")))
-                if needs_match
-                else ()
-            )
-            issues_by_id[issue_id] = RoadmapIssue(
-                issue_id=issue_id,
-                title=issue_match.group("title").strip(),
-                story_id=find_story_id_of_issue(issue_id),
-                status=status_match.group("status") if status_match else "todo",
-                needed_issue_ids=needed_issue_ids,
-            )
+        read_issues_from_text(story_text, issue_block_pattern, issue_id_pattern, issues_by_id)
+    if issues_directory is not None:
+        for state_name in (OPEN_ISSUES_DIRECTORY_NAME, DONE_ISSUES_DIRECTORY_NAME):
+            for issue_file in sorted((issues_directory / state_name).glob("*.md")):
+                issue_text = issue_file.read_text(encoding="utf-8")
+                read_issues_from_text(
+                    issue_text, issue_block_pattern, issue_id_pattern, issues_by_id
+                )
     return issues_by_id, story_ids_in_order
 
 
@@ -293,7 +319,9 @@ def regenerate_roadmap_story_table(repository: Path, settings: RepositorySetting
     True when the file changed. Raises ValueError or OSError when the roadmap cannot be written.
     """
     issues_by_id, story_ids_in_order = read_roadmap_issues(
-        repository / settings.stories_directory, settings.issue_id_pattern
+        repository / settings.stories_directory,
+        settings.issue_id_pattern,
+        find_issues_directory(repository, settings),
     )
     focus_path = repository / settings.focus_file
     focus_story_ids = (
@@ -337,7 +365,9 @@ def main(argv: list[str] | None = None) -> int:
         print(settings_error, file=sys.stderr)
         return EXIT_CODE_USAGE_ERROR
     issues_by_id, story_ids_in_order = read_roadmap_issues(
-        repository / settings.stories_directory, settings.issue_id_pattern
+        repository / settings.stories_directory,
+        settings.issue_id_pattern,
+        find_issues_directory(repository, settings),
     )
     focus_path = repository / settings.focus_file
     focus_story_ids = (

@@ -25,14 +25,18 @@ jobs:
     name: Rebase open pull requests onto the main branch
     runs-on: ubuntu-24.04
     steps:
+      - name: Check out the devops-tools scripts
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: SETA1609/devops_tools
+          ref: ${{ inputs.devops-tools-version }}
+          path: devops-tools-checkout
+          persist-credentials: false
+
       - name: Check the devops-tools version
         env:
           DEVOPS_TOOLS_VERSION: ${{ inputs.devops-tools-version }}
-        run: |
-          if ! [[ "$DEVOPS_TOOLS_VERSION" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "devops-tools-version must be a full 40-character commit SHA, got: $DEVOPS_TOOLS_VERSION" >&2
-            exit 1
-          fi
+        run: bash "$GITHUB_WORKSPACE/devops-tools-checkout/scripts/workflows/check_devops_tools_version.sh"
 
       - name: Install uv
         uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
@@ -40,18 +44,16 @@ jobs:
           version: "0.10.12"
           python-version: "3.13"
 
-      - name: Check out
+      - name: Check out the calling repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
+          path: calling-repository
           fetch-depth: 0
 
       - name: Rebase open pull requests
+        working-directory: calling-repository
         env:
           DEVOPS_TOOLS_VERSION: ${{ inputs.devops-tools-version }}
           SETTINGS_FILE: ${{ inputs.settings-file }}
           GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          settings_arguments=()
-          if [ -n "$SETTINGS_FILE" ]; then settings_arguments=(--settings-file "$SETTINGS_FILE"); fi
-          uvx --from "git+https://github.com/SETA1609/devops_tools@$DEVOPS_TOOLS_VERSION" \
-            devops-tools rebase-open-branches "${settings_arguments[@]}"
+        run: bash "$GITHUB_WORKSPACE/devops-tools-checkout/scripts/workflows/run_rebase_open_branches.sh"

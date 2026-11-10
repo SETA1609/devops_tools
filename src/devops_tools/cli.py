@@ -16,6 +16,7 @@ from pathlib import Path
 from devops_tools import (
     changelog_fragments,
     check_submodule_pins,
+    close_merged_issue,
     container_cli,
     fetch_docs,
     rebase_open_branches,
@@ -55,6 +56,7 @@ Repository workflow (settings: [tool.devops-tools] in pyproject.toml; --help on 
   check-submodule-pins   check that every submodule pin is on its upstream branch
   status-report          where the work stands: branches, pull requests, story issues
   roadmap-order          show, write, or check first / ready / blocked order keywords
+  close-merged-issue     move a merged issue file to done and regenerate the roadmap
   fetch-docs             download docs, specs, and sources into the local cache
 
 Toolchain container (settings: [tool.devops-tools.container]; logged to cache/logs):
@@ -68,6 +70,7 @@ REPOSITORY_WORKFLOW_SUBCOMMANDS: dict[str, Callable[[list[str]], int]] = {
     "check-submodule-pins": check_submodule_pins.main,
     "status-report": status_report.main,
     "roadmap-order": roadmap_order.main,
+    "close-merged-issue": close_merged_issue.main,
     "fetch-docs": fetch_docs.main,
     "container": container_cli.main,
 }

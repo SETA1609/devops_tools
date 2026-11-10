@@ -1,0 +1,65 @@
+# Reusable: after a pull request merges, move its issue file from open to done, regenerate the
+# roadmap story table, and commit that to the base branch. The caller runs it on
+# `pull_request: types: [closed]` with contents: write. There is no concurrency group, because
+# GitHub cancels waiting runs of a group and an issue would stay open: the script retries from
+# the latest base branch instead, so two runs that race only retry.
+name: Close merged issue
+
+on:
+  workflow_call:
+    inputs:
+      devops-tools-version:
+        description: Full 40-character commit SHA of SETA1609/devops_tools to run, the same one the caller pins this workflow to.
+        required: true
+        type: string
+      settings-file:
+        description: pyproject.toml with the [tool.devops-tools] table, relative to the repository root. Empty means the root pyproject.toml.
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  close-merged-issue:
+    name: Move the merged issue to done
+    if: github.event.pull_request.merged == true && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out the devops-tools scripts
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: SETA1609/devops_tools
+          ref: ${{ inputs.devops-tools-version }}
+          path: devops-tools-checkout
+          persist-credentials: false
+
+      - name: Check the devops-tools version
+        env:
+          DEVOPS_TOOLS_VERSION: ${{ inputs.devops-tools-version }}
+        run: bash "$GITHUB_WORKSPACE/devops-tools-checkout/scripts/workflows/check_devops_tools_version.sh"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.10.12"
+          python-version: "3.13"
+
+      - name: Check out the calling repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          path: calling-repository
+          ref: ${{ github.event.pull_request.base.ref }}
+          fetch-depth: 0
+
+      - name: Close the issue and commit
+        working-directory: calling-repository
+        env:
+          DEVOPS_TOOLS_VERSION: ${{ inputs.devops-tools-version }}
+          SETTINGS_FILE: ${{ inputs.settings-file }}
+          BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
+          HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+          PULL_REQUEST_NUMBER: ${{ github.event.pull_request.number }}
+          MERGED_AT: ${{ github.event.pull_request.merged_at }}
+        run: bash "$GITHUB_WORKSPACE/devops-tools-checkout/scripts/workflows/close_merged_issue.sh"

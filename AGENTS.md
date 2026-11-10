@@ -8,7 +8,7 @@ Shared devops tooling for several repositories: timestamped run logs and log pru
 - Runtime code uses the Python standard library only. Development uses uv, ruff, and pytest.
 - Work is tracked in `issues.md` (`Issue N`). One issue is one pull request on a branch `issue-<n>-<slug>`, with at most 20 changed files (files with 5 or fewer changed lines do not count). Each pull request adds its entry to `CHANGELOG.md` under `Unreleased`.
 - Commit only when the owner asks. Merging to `main` needs the owner. Do not force-push or rewrite published history.
-- Pin every GitHub Action to a full commit SHA with the version in a comment. Workflow `run:` scripts get inputs and event values through `env:`, never as `${{ }}` inside the script; `tests/test_workflows.py` checks both.
+- Pin every GitHub Action to a full commit SHA with the version in a comment. A workflow `run:` step is one call of a committed script in `scripts/workflows/`, never inline scripting; a reusable workflow checks this repository out at the pinned commit to reach it. Scripts get inputs and event values through `env:`, never as `${{ }}`. `tests/test_workflows.py` checks all of this.
 - Releases are tags `vX.Y.Z` on `main`. Cutting one: move the `Unreleased` entries under `## vX.Y.Z`, merge that, then tag the merge commit. Tags are never moved or deleted. Pushing a tag needs the owner.
 
 ## Code style
