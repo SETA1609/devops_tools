@@ -12,7 +12,7 @@ allowed-tools: Bash, Read
 
 # Roadmap order
 
-`devops-tools roadmap-order` reads the story files (`stories-directory`), the `Focus:` line (`focus-file`), and writes only the story table between the `<!-- roadmap-order begin … -->` and `<!-- roadmap-order end -->` markers in `roadmap-file`.
+`devops-tools roadmap-order` reads the story files (`stories-directory`), the per-issue files when `issues-directory` is set, the `Focus:` line (`focus-file`), and writes only the story table between the `<!-- roadmap-order begin … -->` and `<!-- roadmap-order end -->` markers in `roadmap-file`.
 
 ## How to run
 

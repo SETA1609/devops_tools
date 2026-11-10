@@ -38,14 +38,15 @@ def list_run_blocks(workflow_text: str) -> list[str]:
     return run_blocks
 
 
-def test_the_repository_has_the_three_reusable_workflows():
+def test_the_repository_has_the_four_reusable_workflows():
     """
     What: the reusable workflows in .github/workflows.
     When: the test suite runs.
-    Then: rebase, changelog fragment, and submodule pin workflows exist.
+    Then: issue closing, rebase, changelog fragment, and submodule pin workflows exist.
     """
     assert [path.name for path in REUSABLE_WORKFLOW_PATHS] == [
         "changelog-fragments.yml",
+        "close-merged-issue.yml",
         "rebase-open-branches.yml",
         "submodule-pins.yml",
     ]

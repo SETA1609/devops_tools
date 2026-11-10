@@ -75,6 +75,7 @@ These print plain output for CI; wrap one in `devops-tools run <name> -- ...` to
 | `changelog-fragments check [--branch B]` | Each pull request adds `changes/<issue-id>.md` instead of editing the changelog. Checks every fragment, and with `--branch` that the branch's issue has one. |
 | `changelog-fragments preview` | Prints the unreleased entries, newest first. |
 | `changelog-fragments release --section-title T` | Moves the fragments into the changelog under `## T`, with `(#N)` from squash merge subjects, and deletes them. |
+| `close-merged-issue --branch B --pull-request-number N --merge-date D` | Needs `issues-directory`. Moves the issue named by the merged branch from `open/` to `done/` with `Status: done` and a `Merged:` line, when its status is `review`; other statuses stay open. Regenerates the roadmap story table. Commits nothing; the `close-merged-issue.yml` reusable workflow commits to the base branch. |
 | `check-submodule-pins [--json]` | Checks that every submodule pointer is a commit on its upstream branch, not only on a pull request ref. Suggests a commit on the branch with the same tree. |
 
 All three take `--repository PATH` (default: the current directory) and `--settings-file PATH`.
@@ -91,6 +92,7 @@ changes-directory = "changes"                              # fragments
 changelog-file = "CHANGELOG.md"                            # fragments and the rebase merge driver
 keep-both-added-lines = ["docs/stories/*.md"]             # more files the rebase merges like the changelog
 regenerate-roadmap-on-rebase = true                        # rebuild the roadmap story table when rebasing
+issues-directory = "docs/issues"                           # one file per issue in open/ and done/
 ```
 
 Branch names are `<issue-id>-<slug>` or `agent/<agent-name>/<issue-id>-<slug>`, matched ignoring case.

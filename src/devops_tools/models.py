@@ -92,7 +92,8 @@ class RepositorySettings:
     generated story order table; `focus_file` holds the owner's `Focus:` line;
     `docs_cache_directory` is where fetch-docs saves downloads.
     `regenerate_roadmap_on_rebase` makes rebase-open-branches rebuild the generated story table
-    in `roadmap_file` instead of merging it line by line.
+    in `roadmap_file` instead of merging it line by line. `issues_directory`, when set, holds
+    one file per issue in its `open` and `done` subdirectories, read beside the story files.
     """
 
     main_branch: str = DEFAULT_MAIN_BRANCH
@@ -105,6 +106,7 @@ class RepositorySettings:
     focus_file: str = DEFAULT_FOCUS_FILE
     docs_cache_directory: str = DEFAULT_DOCS_CACHE_DIRECTORY
     regenerate_roadmap_on_rebase: bool = False
+    issues_directory: str = ""
     container: ContainerSettings | None = None
 
 

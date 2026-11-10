@@ -445,3 +445,35 @@ def test_main_prints_json(workspace, capsys):
     report = json.loads(capsys.readouterr().out)
     assert report["current_branch"] == "main"
     assert {branch["name"] for branch in report["branches"]} >= {"ab-01-merged", "ab-02-open"}
+
+
+def test_open_issue_files_list_active_issues_and_the_first_todo_of_each_story(tmp_path):
+    """
+    What: list_story_issue_statuses with an issues directory.
+    When: open per-issue files hold review and todo issues of two stories, numbered past nine.
+    Then: review comes first, then the lowest-numbered todo per story in story file order.
+    """
+    stories_directory = tmp_path / "stories"
+    stories_directory.mkdir()
+    (stories_directory / "01-first.md").write_text(
+        "## CD Later letter, first story\n\n## AB Second story\n", encoding="utf-8"
+    )
+    open_directory = tmp_path / "issues" / "open"
+    open_directory.mkdir(parents=True)
+    for issue_id, status in [
+        ("AB-10", "todo"),
+        ("AB-02", "todo"),
+        ("CD-01", "review"),
+        ("CD-02", "todo"),
+    ]:
+        (open_directory / f"{issue_id}.md").write_text(
+            f"#### {issue_id} Title\n- Status: {status}\n", encoding="utf-8"
+        )
+    issues = status_report.list_story_issue_statuses(
+        stories_directory, [], issues_directory=tmp_path / "issues"
+    )
+    assert [(issue.issue_id, issue.story_file) for issue in issues] == [
+        ("CD-01", "open/CD-01.md"),
+        ("CD-02", "open/CD-02.md"),
+        ("AB-02", "open/AB-02.md"),
+    ]

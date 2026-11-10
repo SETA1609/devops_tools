@@ -4,6 +4,12 @@ Newest first. Each entry names its issue from `issues.md`.
 
 ## Unreleased
 
+### Issue 11: One file per issue, closed when its pull request merges
+
+- Settings: `issues-directory` makes `roadmap-order` and `status-report` read one Markdown file per issue from its `open` and `done` subdirectories.
+- `close-merged-issue`: moves the issue named by a merged branch to `done` with its `Merged:` line when its status is `review`, and regenerates the roadmap story table. An issue in another status stays open.
+- Workflow: reusable `close-merged-issue.yml` runs it after a merge and commits to the base branch, retrying from the latest base branch when a push loses a race.
+
 ## v0.3.0 (2026-11-04)
 
 The rebase can regenerate the roadmap story table instead of merging it line by line.
